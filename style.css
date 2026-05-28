@@ -24,7 +24,7 @@
 
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: var(--bg-primary);
+    background: #080c14;
     color: var(--text-primary);
     overflow: hidden;
     height: 100vh;
@@ -33,12 +33,20 @@ body {
     -webkit-user-select: none;
 }
 
+/* ===== 粒子背景画布 ===== */
+#cursorCanvas {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+}
+
 /* ===== 壁纸（主界面完整，次级界面降低饱和度/明度+放大+模糊）===== */
 .wallpaper {
     position: fixed;
     inset: 0;
     z-index: 0;
-    background: linear-gradient(135deg, #0a0a0f 0%, #16162a 50%, #0a0a0f 100%);
+    background: linear-gradient(135deg, #080c14 0%, #0f1420 50%, #080c14 100%);
 }
 
 .wallpaper-img {
@@ -560,31 +568,6 @@ body {
 
 .links-footer-hint { margin-top: 24px; margin-bottom: 24px; cursor: pointer; padding: 20px; }
 
-/* ===== 光标画布 ===== */
-#cursorCanvas {
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    pointer-events: none;
-    mix-blend-mode: screen;
-}
-
-/* 鼠标悬停交互式元素——轻微上浮 */
-.engine-current:hover,
-.search-btn:hover,
-.fav-card:hover,
-.link-card:hover,
-.add-card:hover,
-.add-cat-btn:hover,
-.bg-settings-btn:hover,
-.modal-close:hover,
-.btn:hover,
-.history-tag:hover,
-.clear-history:hover,
-.context-item:hover,
-.cat-btn:hover {
-    transform: translateY(-2px) !important;
-}
 
 /* ===== 滚动条 ===== */
 ::-webkit-scrollbar { width: 4px; }
