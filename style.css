@@ -560,6 +560,32 @@ body {
 
 .links-footer-hint { margin-top: 24px; margin-bottom: 24px; cursor: pointer; padding: 20px; }
 
+/* ===== 光标画布 ===== */
+#cursorCanvas {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    mix-blend-mode: screen;
+}
+
+/* 鼠标悬停交互式元素——轻微上浮 */
+.engine-current:hover,
+.search-btn:hover,
+.fav-card:hover,
+.link-card:hover,
+.add-card:hover,
+.add-cat-btn:hover,
+.bg-settings-btn:hover,
+.modal-close:hover,
+.btn:hover,
+.history-tag:hover,
+.clear-history:hover,
+.context-item:hover,
+.cat-btn:hover {
+    transform: translateY(-2px) !important;
+}
+
 /* ===== 滚动条 ===== */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }

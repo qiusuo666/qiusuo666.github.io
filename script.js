@@ -878,11 +878,11 @@ favoritesTrack.addEventListener('wheel', (e) => {
 // 背景图系统
 // ============================================
 const PRESET_BG = [
-    { file: 'wallhaven-yqvj5g_3840x2160.png', name: '梵高·星空' },
-    { file: 'wallhaven-7pje5o_3840x2160.png', name: '暮光森林' },
-    { file: 'wallhaven-k8z1q7_3840x2160.png', name: '樱花街道' },
-    { file: 'wallhaven-qrgj6l_3840x2160.png', name: '海岸晚霞' },
-    { file: 'wallhaven-rqjrzq_3840x2160.png', name: '雪山镜湖' },
+    { file: 'wallhaven-yqvj5g_3840x2160.jpg', name: '梵高·星空' },
+    { file: 'wallhaven-7pje5o_3840x2160.jpg', name: '暮光森林' },
+    { file: 'wallhaven-k8z1q7_3840x2160.jpg', name: '樱花街道' },
+    { file: 'wallhaven-qrgj6l_3840x2160.jpg', name: '海岸晚霞' },
+    { file: 'wallhaven-rqjrzq_3840x2160.jpg', name: '雪山镜湖' },
 ];
 
 let customBgFiles = [];  // { name, dataURL }
@@ -990,6 +990,186 @@ bgFileInput.addEventListener('change', () => {
 });
 
 // ============================================
+// 磁性流体光标系统
+// ============================================
+(function() {
+    const canvas = document.getElementById('cursorCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    let w, h;
+    // 实际鼠标位置
+    let mx = 0, my = 0;
+    // lerp 跟随的光标位置（平滑延迟跟随）
+    let cursor = { x: 0, y: 0 };
+    // 外层环的延迟位置
+    let ring = { x: 0, y: 0, rx: 20, ry: 20 };
+
+    // 粒子池：卫星粒子
+    const satellites = [];
+    const SATELLITE_COUNT = 7;
+
+    // 鼠标移出窗口标记
+    let mouseOnScreen = false;
+
+    // 悬停状态
+    let hoverTarget = null;
+    let hoverRect = null;
+
+    // ====== resize ======
+    function resize() {
+        const dpr = window.devicePixelRatio || 1;
+        w = window.innerWidth;
+        h = window.innerHeight;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        canvas.style.width = w + 'px';
+        canvas.style.height = h + 'px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    window.addEventListener('resize', resize);
+
+    // ====== 鼠标追踪 ======
+    document.addEventListener('mousemove', (e) => {
+        mx = e.clientX;
+        my = e.clientY;
+        mouseOnScreen = true;
+    });
+    document.addEventListener('mouseleave', () => { mouseOnScreen = false; });
+    document.addEventListener('mouseenter', () => { mouseOnScreen = true; mx = cursor.x; my = cursor.y; });
+
+    // ====== 悬停检测 ======
+    function getHoverTarget(x, y) {
+        const els = document.querySelectorAll('.fav-card, .link-card, .add-card, .search-btn, .engine-current, .bg-settings-btn, .btn, .modal-close, .history-tag, .context-item, .cat-btn, .add-cat-btn, .clear-history');
+        for (const el of els) {
+            const rect = el.getBoundingClientRect();
+            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                return { el, rect };
+            }
+        }
+        return null;
+    }
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    // ====== 初始化卫星 ======
+    for (let i = 0; i < SATELLITE_COUNT; i++) {
+        satellites.push({
+            angle: (Math.PI * 2 / SATELLITE_COUNT) * i,
+            radius: 18 + Math.random() * 8,    // 基础半径 18-26px
+            speed: 0.5 + Math.random() * 0.3,   // 旋转速度
+            jitter: Math.random() * Math.PI * 2,
+            size: 2 + Math.random() * 2,        // 粒子大小 2-4px
+            alpha: 0.6 + Math.random() * 0.4,
+            colorBoost: Math.random()           // 颜色混合系数
+        });
+    }
+
+    // ====== 主循环 ======
+    function draw() {
+        ctx.clearRect(0, 0, w, h);
+
+        // 悬停检测
+        const target = getHoverTarget(cursor.x, cursor.y);
+        hoverTarget = target?.el || null;
+        hoverRect = target?.rect || null;
+
+        // lerp 光标层（第一层）
+        const lerpSpeed = hoverTarget ? 0.25 : 0.2;
+        cursor.x = lerp(cursor.x, mx, lerpSpeed);
+        cursor.y = lerp(cursor.y, my, lerpSpeed);
+
+        // lerp 外环（第三层）- 更大的延迟
+        const ringSpeed = hoverTarget ? 0.35 : 0.08;
+        ring.x = lerp(ring.x, mx, ringSpeed);
+        ring.y = lerp(ring.y, my, ringSpeed);
+
+        // 运动方向对椭圆环的影响
+        const dx = mx - ring.x;
+        const dy = my - ring.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const targetRX = 88 + Math.min(dist * 0.3, 60);
+        const targetRY = 88 - Math.min(dist * 0.3, 50);
+        ring.rx = lerp(ring.rx, Math.max(targetRY, 20), 0.1);
+        ring.ry = lerp(ring.ry, Math.max(targetRY, 20), 0.1);
+
+        // 悬停时的目标
+        let attractX = cursor.x, attractY = cursor.y;
+        if (hoverTarget && hoverRect) {
+            attractX = (hoverRect.left + hoverRect.right) / 2;
+            attractY = (hoverRect.top + hoverRect.bottom) / 2;
+        }
+
+        if (!mouseOnScreen) return requestAnimationFrame(draw);
+
+        // ---- 第三层：外环描边 ----
+        ctx.save();
+        ctx.beginPath();
+        const rx = hoverTarget ? Math.min(hoverRect.width / 2 + 4, 50) : ring.rx;
+        const ry = hoverTarget ? Math.min(hoverRect.height / 2 + 4, 50) : ring.ry;
+        const cx = hoverTarget ? attractX : ring.x;
+        const cy = hoverTarget ? attractY : ring.y;
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(99, 179, 255, 0.25)';
+        ctx.lineWidth = 1.5;
+        ctx.shadowColor = 'rgba(99, 179, 255, 0.3)';
+        ctx.shadowBlur = 12;
+        ctx.stroke();
+        ctx.restore();
+
+        // ---- 第二层：模糊光晕 ----
+        const glowGrad = ctx.createRadialGradient(
+            attractX, attractY, 0,
+            attractX, attractY, hoverTarget ? 40 : 55
+        );
+        glowGrad.addColorStop(0, 'rgba(99, 179, 255, 0.18)');
+        glowGrad.addColorStop(0.5, 'rgba(120, 200, 255, 0.06)');
+        glowGrad.addColorStop(1, 'rgba(99, 179, 255, 0)');
+        ctx.fillStyle = glowGrad;
+        ctx.beginPath();
+        ctx.arc(attractX, attractY, hoverTarget ? 40 : 55, 0, Math.PI * 2);
+        ctx.fill();
+
+        // ---- 第一层：卫星粒子 ----
+        for (const s of satellites) {
+            s.angle += s.speed * 0.05;
+            const a = s.angle + s.jitter;
+            const r = hoverTarget ? s.radius * 0.4 : s.radius;
+            const px = attractX + Math.cos(a) * r;
+            const py = attractY + Math.sin(a) * r;
+
+            const grad = ctx.createRadialGradient(px, py, 0, px, py, s.size * 2);
+            const b = s.colorBoost;
+            grad.addColorStop(0, `rgba(${180 + b * 75}, ${220 - b * 60}, 255, ${s.alpha})`);
+            grad.addColorStop(1, 'rgba(99, 179, 255, 0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(px, py, s.size * 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // ---- 鼠标替换点 ----
+        ctx.beginPath();
+        ctx.arc(cursor.x, cursor.y, 1.8, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.shadowColor = 'rgba(255, 255, 255, 0.6)';
+        ctx.shadowBlur = 6;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        requestAnimationFrame(draw);
+    }
+
+    resize();
+    // 初始位置设为屏幕中心
+    cursor.x = w / 2; cursor.y = h / 2;
+    ring.x = w / 2; ring.y = h / 2;
+    mx = w / 2; my = h / 2;
+    draw();
+    console.log('🖱️ 磁性流体光标已启动');
+})();
+
+// ============================================
 // 初始化
 // ============================================
 function init() {
@@ -1003,7 +1183,6 @@ function init() {
     updateClock();
 
     setInterval(updateClock, 1000);
-    setTimeout(() => searchInput.focus(), 500);
 
     const style = document.createElement('style');
     style.textContent = `@keyframes shake{0%,100%{transform:translateX(0)}10%,30%,50%,70%,90%{transform:translateX(-4px)}20%,40%,60%,80%{transform:translateX(4px)}}.shake{animation:shake .4s ease}`;
