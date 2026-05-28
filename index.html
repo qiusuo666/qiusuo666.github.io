@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>新标签页</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- 壁纸层 -->
+    <div class="wallpaper" id="wallpaper">
+        <div class="wallpaper-img" id="wallpaperImg"></div>
+        <div class="overlay"></div>
+    </div>
+
+    <!-- 主界面 -->
+    <div class="main-view" id="mainView">
+        <div class="clock-container">
+            <div class="time" id="clockTime">00:00:00</div>
+            <div class="date" id="clockDate">2026年1月1日 星期四</div>
+        </div>
+
+        <div class="search-container">
+            <div class="search-box">
+                <div class="search-engine-selector" id="engineSelector">
+                    <div class="engine-current">
+                        <img id="currentEngineIcon" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'%3E%3Cpath d='M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z'/%3E%3C/svg%3E" alt="">
+                        <span id="currentEngineName">Google</span>
+                        <svg class="arrow-down" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+                    </div>
+                    <div class="engine-dropdown" id="engineDropdown"></div>
+                </div>
+                <input type="text" class="search-input" id="searchInput" placeholder="输入关键词搜索..." autofocus>
+                <button class="search-btn" id="searchBtn">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                </button>
+            </div>
+            <div class="suggestions" id="suggestions"></div>
+            <div class="search-history" id="searchHistory">
+                <div class="history-header">
+                    <span>搜索历史</span>
+                    <button class="clear-history" id="clearHistory">清空</button>
+                </div>
+                <div class="history-tags" id="historyTags"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 次级页面 -->
+    <div class="links-view" id="linksView">
+        <div class="links-header">
+            <h2>快捷网址</h2>
+            <button class="add-cat-btn" id="addCategoryBtn">+ 新建分类</button>
+        </div>
+        <div class="links-container" id="linksContainer"></div>
+        <div class="links-footer-hint links-view-bg"></div>
+    </div>
+
+    <!-- 弹窗 -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal" id="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">添加快捷网址</h3>
+                <button class="modal-close" id="modalClose">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="linkForm">
+                    <div class="form-group">
+                        <label>网站名称</label>
+                        <input type="text" class="form-input" id="linkName" placeholder="例如：GitHub" maxlength="20">
+                    </div>
+                    <div class="form-group">
+                        <label>网址 (URL)</label>
+                        <input type="text" class="form-input" id="linkUrl" placeholder="例如：https://github.com">
+                    </div>
+                </div>
+                <div id="catForm" style="display:none;">
+                    <div class="form-group">
+                        <label>分类名称</label>
+                        <input type="text" class="form-input" id="catNameInput" placeholder="例如：工作" maxlength="15">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-cancel" id="modalCancel">取消</button>
+                <button class="btn btn-confirm" id="modalConfirm">添加</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 快捷栏（跨页面） -->
+    <div class="favorites-bar" id="favoritesBar">
+        <div class="favorites-label">★ 常用</div>
+        <div class="favorites-track" id="favoritesTrack">
+            <div class="fav-drop-hint" id="favDropHint">拖拽网址到此处</div>
+        </div>
+    </div>
+
+    <!-- 右键菜单 -->
+    <div class="context-menu" id="contextMenu">
+        <div class="context-items" id="contextItems"></div>
+    </div>
+
+    <!-- 背景设置按钮 -->
+    <button class="bg-settings-btn" id="bgSettingsBtn" title="更换背景">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="20" rx="5"/>
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M2 12h4m12 0h4M12 2v4m0 12v4"/>
+            <circle cx="6" cy="6" r="1" fill="currentColor"/>
+            <circle cx="18" cy="18" r="1" fill="currentColor"/>
+            <circle cx="18" cy="6" r="1" fill="currentColor"/>
+            <circle cx="6" cy="18" r="1" fill="currentColor"/>
+        </svg>
+    </button>
+
+    <!-- 背景选择面板 -->
+    <div class="bg-panel" id="bgPanel">
+        <div class="bg-panel-header">
+            <span>更换背景</span>
+            <button class="bg-panel-close" id="bgPanelClose">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+        </div>
+        <div class="bg-panel-grid" id="bgPanelGrid">
+            <!-- 由 JS 动态生成 -->
+        </div>
+        <div class="bg-panel-footer">
+            <label class="bg-upload-btn">
+                <span>+ 自定义图片</span>
+                <input type="file" id="bgFileInput" accept="image/*" hidden>
+            </label>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
