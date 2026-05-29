@@ -11,7 +11,6 @@ const ENGINES = [
 ];
 
 // ============================================
-// ============================================
 // 状态管理
 // ============================================
 const STATE = {
@@ -19,8 +18,8 @@ const STATE = {
     history: [],
     defaultCategoryId: 'cat-default',
     categories: [],
-    favorites: [],          // { id, name, url } — 主界面快捷栏
-    dragData: null,         // { catId, linkId, fromFavorites: bool }
+    favorites: [],
+    dragData: null,
     dragFromFavorites: false,
     contextLinkId: null,
     contextCatId: null,
@@ -32,6 +31,40 @@ const STATE = {
 // DOM 引用
 // ============================================
 const $ = id => document.getElementById(id);
+
+// Auth DOM refs
+const authBtn = $('authBtn');
+const userDropdown = $('userDropdown');
+const userDropdownName = $('userDropdownName');
+const userDropdownSync = $('userDropdownSync');
+const authModalOverlay = $('authModalOverlay');
+const authModalTitle = $('authModalTitle');
+const authModalSubtitle = $('authModalSubtitle');
+const authUsername = $('authUsername');
+const authPassword = $('authPassword');
+const authConfirmPasswordGroup = $('authConfirmPasswordGroup');
+const authConfirmPassword = $('authConfirmPassword');
+const authOldPasswordGroup = $('authOldPasswordGroup');
+const authOldPassword = $('authOldPassword');
+const authNewPasswordGroup = $('authNewPasswordGroup');
+const authNewPassword = $('authNewPassword');
+const authRememberLabel = $('authRememberLabel');
+const authRememberMe = $('authRememberMe');
+const authError = $('authError');
+const authSubmitBtn = $('authSubmitBtn');
+const authSwitchText = $('authSwitchText');
+const authSwitchBtn = $('authSwitchBtn');
+const syncToast = $('syncToast');
+
+// Auth state
+let authMode = 'login';
+let isLoggedIn = false;
+let currentUser = null;
+let syncDebounceTimer = null;
+let lastSyncTime = null;
+let isSyncing = false;
+const SYNC_DEBOUNCE = 3000;
+
 const clockTime = $('clockTime');
 const clockDate = $('clockDate');
 const searchInput = $('searchInput');
@@ -67,19 +100,14 @@ const linkForm = $('linkForm');
 const catForm = $('catForm');
 
 // ============================================
-// 工具函数
+// 工具
 // ============================================
 function generateId() {
     return 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
 }
 
-function getFaviconUrl(url) {
-    try { const u = new URL(url); return `https://www.google.com/s2/favicons?domain=${u.hostname}&sz=64`; }
-    catch { return ''; }
-}
-
 // ============================================
-// LocalStorage
+// 存储
 // ============================================
 function saveState() {
     try {
@@ -90,6 +118,10 @@ function saveState() {
             favorites: STATE.favorites
         }));
     } catch (e) {}
+    if (isLoggedIn && !isSyncing) {
+        clearTimeout(syncDebounceTimer);
+        syncDebounceTimer = setTimeout(() => uploadToCloud(), SYNC_DEBOUNCE);
+    }
 }
 
 function loadState() {
@@ -104,27 +136,26 @@ function loadState() {
             return;
         }
     } catch (e) {}
-    // defaults
     STATE.currentEngine = 0;
     STATE.history = [];
     STATE.categories = [{
         id: STATE.defaultCategoryId,
         name: '常用',
         links: [
-            { id: 'd1', name: 'GitHub',     url: 'https://github.com' },
-            { id: 'd2', name: '哔哩哔哩',   url: 'https://www.bilibili.com' },
-            { id: 'd3', name: 'YouTube',    url: 'https://www.youtube.com' },
-            { id: 'd4', name: 'Twitter',    url: 'https://twitter.com' },
-            { id: 'd5', name: 'Reddit',     url: 'https://www.reddit.com' },
+            { id: 'd1', name: 'GitHub', url: 'https://github.com' },
+            { id: 'd2', name: '哔哩哔哩', url: 'https://www.bilibili.com' },
+            { id: 'd3', name: 'YouTube', url: 'https://www.youtube.com' },
+            { id: 'd4', name: 'Twitter', url: 'https://twitter.com' },
+            { id: 'd5', name: 'Reddit', url: 'https://www.reddit.com' },
             { id: 'd6', name: 'Stack Overflow', url: 'https://stackoverflow.com' },
-            { id: 'd7', name: 'Wikipedia',  url: 'https://www.wikipedia.org' },
-            { id: 'd8', name: 'Gmail',      url: 'https://mail.google.com' }
+            { id: 'd7', name: 'Wikipedia', url: 'https://www.wikipedia.org' },
+            { id: 'd8', name: 'Gmail', url: 'https://mail.google.com' }
         ]
     }];
 }
 
 // ============================================
-// 数字时钟
+// 时钟
 // ============================================
 function updateClock() {
     const now = new Date();
@@ -141,7 +172,7 @@ function updateClock() {
 }
 
 // ============================================
-// 搜索引擎切换（修复版）
+// 搜索引擎
 // ============================================
 function renderEngines() {
     const selected = ENGINES[STATE.currentEngine];
@@ -169,20 +200,16 @@ function renderEngines() {
     });
 }
 
-// ===== 引擎下拉菜单开关 =====
 function openEngineDropdown() { engineSelector.classList.add('open'); }
 function closeEngineDropdown() { engineSelector.classList.remove('open'); }
 function toggleEngineDropdown() { engineSelector.classList.contains('open') ? closeEngineDropdown() : openEngineDropdown(); }
 
-// 点击引擎按钮切换下拉菜单
 document.querySelector('.engine-current').addEventListener('click', (e) => { e.stopPropagation(); toggleEngineDropdown(); });
-// 点击下拉菜单内的选项不关闭（由选项自己的 click 处理）
 engineDropdown.addEventListener('click', (e) => { e.stopPropagation(); });
-// 点击页面其他任何地方关闭下拉菜单
 document.addEventListener('click', () => { closeEngineDropdown(); });
 
 // ============================================
-// 搜索功能
+// 搜索
 // ============================================
 function doSearch(query) {
     if (!query || !query.trim()) return;
@@ -208,7 +235,6 @@ function renderHistory() {
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
             </span>
         </div>`).join('');
-
     historyTags.querySelectorAll('.history-tag').forEach(el => {
         el.addEventListener('click', (e) => { if (e.target.closest('.remove-history')) return; doSearch(el.dataset.query); });
     });
@@ -218,7 +244,6 @@ function renderHistory() {
 }
 clearHistoryBtn.addEventListener('click', clearAllHistory);
 
-// 搜索框 Q弹拉长动效
 const searchBox = document.querySelector('.search-box');
 searchInput.addEventListener('focus', () => { searchBox.classList.add('focused'); });
 searchInput.addEventListener('blur', () => { searchBox.classList.remove('focused'); });
@@ -226,7 +251,6 @@ searchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.prev
 searchBtn.addEventListener('click', () => { doSearch(searchInput.value); });
 searchInput.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeSuggestions(); searchInput.blur(); } });
 
-// 搜索建议
 let suggestTimer = null;
 searchInput.addEventListener('input', () => {
     clearTimeout(suggestTimer);
@@ -246,7 +270,7 @@ function showSuggestions(items) {
 function closeSuggestions() { suggestions.classList.remove('active'); suggestions.innerHTML = ''; }
 
 // ============================================
-// 视图切换
+// 视图
 // ============================================
 function showMainView() {
     mainView.classList.remove('hidden');
@@ -279,13 +303,13 @@ document.addEventListener('mousedown', (e) => {
 });
 
 // ============================================
-// 颜色工具
+// 颜色
 // ============================================
 const COLORS = ['linear-gradient(135deg, #6c5ce7, #a29bfe)','linear-gradient(135deg, #fd79a8, #e84393)','linear-gradient(135deg, #00cec9, #00b894)','linear-gradient(135deg, #fdcb6e, #e17055)','linear-gradient(135deg, #0984e3, #6c5ce7)','linear-gradient(135deg, #e17055, #d63031)','linear-gradient(135deg, #00b894, #00cec9)','linear-gradient(135deg, #6c5ce7, #fd79a8)','linear-gradient(135deg, #f9ca24, #f0932b)','linear-gradient(135deg, #a29bfe, #6c5ce7)'];
 function getColorForName(name) { let hash = 0; for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash); return COLORS[Math.abs(hash) % COLORS.length]; }
 
 // ============================================
-// 分类系统：渲染
+// 分类系统
 // ============================================
 function renderLinks() {
     linksContainer.innerHTML = '';
@@ -333,9 +357,7 @@ function handleDropOnCategory(targetCatId) {
 }
 
 function removeLink(linkId, catId) { const cat = STATE.categories.find(c => c.id === catId); if (!cat) return; cat.links = cat.links.filter(l => l.id !== linkId); saveState(); renderLinks(); }
-
 function addOrEditLink(name, url) { const cat = STATE.categories.find(c => c.id === STATE.editCatId); if (!cat) return; if (STATE.editLinkId) { const idx = cat.links.findIndex(l => l.id === STATE.editLinkId); if (idx !== -1) { cat.links[idx].name = name; cat.links[idx].url = url; } } else { cat.links.push({ id: generateId(), name, url }); } saveState(); renderLinks(); closeModal(); }
-
 function openCatRenameModal(catId) { const cat = STATE.categories.find(c => c.id === catId); if (!cat) return; STATE.editCatId = catId; catNameInput.value = cat.name; modalTitle.textContent = '重命名分类'; modalConfirm.textContent = '保存'; linkForm.style.display = 'none'; catForm.style.display = 'block'; openModal(); }
 function saveCatName(name) { const cat = STATE.categories.find(c => c.id === STATE.editCatId); if (!cat) return; cat.name = name; saveState(); renderLinks(); closeModal(); }
 function createNewCategory() { STATE.editCatId = null; catNameInput.value = ''; modalTitle.textContent = '新建分类'; modalConfirm.textContent = '创建'; linkForm.style.display = 'none'; catForm.style.display = 'block'; openModal(); }
@@ -379,7 +401,7 @@ document.addEventListener('mousedown', (e) => { if (!e.target.closest('.context-
 linksContainer.addEventListener('contextmenu', (e) => { if (e.target.closest('.link-card') || e.target.closest('.cat-header')) e.preventDefault(); });
 
 // ============================================
-// 快捷栏渲染
+// 快捷栏
 // ============================================
 function renderFavorites() {
     favoritesTrack.querySelectorAll('.fav-card').forEach(el => el.remove());
@@ -389,23 +411,13 @@ function renderFavorites() {
         const card = document.createElement('a'); card.className = 'fav-card'; card.href = fav.url; card.target = '_blank'; card.dataset.id = fav.id; card.draggable = true;
         card.innerHTML = `<div class="fav-icon" style="background:${getColorForName(fav.name)}">${fav.name.charAt(0).toUpperCase()}</div><span class="fav-name">${fav.name}</span><div class="fav-remove" data-id="${fav.id}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></div>`;
         card.querySelector('.fav-remove').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); STATE.favorites = STATE.favorites.filter(f => f.id !== fav.id); saveState(); renderFavorites(); });
-        card.addEventListener('dragstart', (e) => { STATE.dragData = { linkId: fav.id, fromFavorites: true }; card.style.opacity = '0.3'; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', fav.id); });
-        card.addEventListener('dragend', () => { card.style.opacity = ''; STATE.dragData = null; });
-        card.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
-        card.addEventListener('dragenter', (e) => { e.preventDefault(); card.classList.add('drag-target'); });
-        card.addEventListener('dragleave', () => { card.classList.remove('drag-target'); });
-        card.addEventListener('drop', (e) => { e.preventDefault(); card.classList.remove('drag-target'); if (!STATE.dragData) return; const fromId = STATE.dragData.linkId; const toId = fav.id; if (fromId === toId) return;
-            if (STATE.dragData.fromFavorites) { const fromIdx = STATE.favorites.findIndex(f => f.id === fromId); const toIdx = STATE.favorites.findIndex(f => f.id === toId); if (fromIdx === -1 || toIdx === -1) return; const [moved] = STATE.favorites.splice(fromIdx, 1); STATE.favorites.splice(toIdx, 0, moved); } else { const fromCat = STATE.categories.find(c => c.id === STATE.dragData.catId); if (!fromCat) return; const li = fromCat.links.find(l => l.id === STATE.dragData.linkId); if (!li || STATE.favorites.find(f => f.id === li.id)) return; const toIdx = STATE.favorites.findIndex(f => f.id === toId); STATE.favorites.splice(toIdx, 0, { id: li.id, name: li.name, url: li.url }); } saveState(); renderFavorites(); });
         favoritesTrack.appendChild(card);
     });
 }
-favoritesTrack.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; favoritesTrack.classList.add('drag-over'); });
-favoritesTrack.addEventListener('dragleave', (e) => { if (!e.target.closest('#favoritesTrack')) favoritesTrack.classList.remove('drag-over'); });
-favoritesTrack.addEventListener('drop', (e) => { e.preventDefault(); favoritesTrack.classList.remove('drag-over'); if (!STATE.dragData || STATE.dragData.fromFavorites) return; const fromCat = STATE.categories.find(c => c.id === STATE.dragData.catId); if (!fromCat) return; const li = fromCat.links.find(l => l.id === STATE.dragData.linkId); if (!li || STATE.favorites.find(f => f.id === li.id)) return; STATE.favorites.push({ id: li.id, name: li.name, url: li.url }); saveState(); renderFavorites(); });
 favoritesTrack.addEventListener('wheel', (e) => { if (favoritesTrack.scrollWidth <= favoritesTrack.clientWidth) return; e.preventDefault(); favoritesTrack.scrollLeft += e.deltaY + e.deltaX; });
 
 // ============================================
-// 背景图系统
+// 壁纸
 // ============================================
 const PRESET_BG = [
     { file: 'wallhaven-yqvj5g_3840x2160.jpg', name: '梵高·星空' },
@@ -448,7 +460,7 @@ document.addEventListener('mousedown', (e) => { if (bgPanel.classList.contains('
 bgFileInput.addEventListener('change', () => { const file = bgFileInput.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { const dataURL = reader.result; customBgFiles.push({ name: file.name.replace(/\.[^.]+$/, ''), dataURL }); if (customBgFiles.length > 10) customBgFiles.shift(); localStorage.setItem('cst_custom_bg', JSON.stringify(customBgFiles)); setWallpaper(dataURL); loadWallpaper(); renderBgPanel(); }; reader.readAsDataURL(file); bgFileInput.value = ''; });
 
 // ============================================
-// 浮动粒子背景系统（排斥 + 潮汐聚散模式）
+// 粒子
 // ============================================
 (function() {
     const canvas = document.getElementById('cursorCanvas');
@@ -562,19 +574,322 @@ bgFileInput.addEventListener('change', () => { const file = bgFileInput.files[0]
         requestAnimationFrame(draw);
     }
     requestAnimationFrame(draw);
-    console.log('🫧 浮动粒子（排斥+潮汐）已启动');
 })();
+
+// ============================================
+// 云端同步
+// ============================================
+function getSyncData() {
+    return {
+        categories: STATE.categories,
+        favorites: STATE.favorites,
+        history: STATE.history,
+        currentEngine: STATE.currentEngine,
+        wallpaper: localStorage.getItem('cst_wallpaper') || null
+    };
+}
+
+function applyCloudData(data) {
+    if (!data) return;
+    if (data.categories && data.categories.length > 0) STATE.categories = data.categories;
+    if (data.favorites) STATE.favorites = data.favorites;
+    if (data.history) STATE.history = data.history;
+    if (data.currentEngine !== undefined) STATE.currentEngine = data.currentEngine;
+    if (data.wallpaper && !data.wallpaper.startsWith('data:')) setWallpaper(data.wallpaper);
+    try { localStorage.setItem('cst_data', JSON.stringify({ categories: STATE.categories, history: STATE.history, currentEngine: STATE.currentEngine, favorites: STATE.favorites })); } catch (e) {}
+    lastSyncTime = new Date();
+    updateSyncStatus();
+}
+
+async function uploadToCloud() {
+    if (!isLoggedIn || isSyncing) return;
+    isSyncing = true;
+    try {
+        await window.CST.uploadData(getSyncData());
+        lastSyncTime = new Date();
+        updateSyncStatus();
+    } catch (e) {
+        userDropdownSync.textContent = '⚠ 同步失败';
+        userDropdownSync.className = 'user-dropdown-sync error';
+    } finally { isSyncing = false; }
+}
+
+async function downloadFromCloud() {
+    if (!isLoggedIn) { showSyncToast('请先登录', 'error'); return; }
+    isSyncing = true;
+    try {
+        const data = await window.CST.downloadData();
+        if (data) {
+            applyCloudData(data);
+            renderLinks(); renderFavorites(); renderHistory(); renderEngines(); loadWallpaper();
+            showSyncToast('已从云端下载数据 ✓', 'success');
+        } else {
+            showSyncToast('云端暂无数据，已上传本地数据', 'success');
+            await uploadToCloud();
+        }
+    } catch (e) { showSyncToast('下载失败：' + (e.message || '请检查网络'), 'error'); }
+    finally { isSyncing = false; }
+}
+
+function updateSyncStatus() {
+    if (!isLoggedIn) return;
+    if (lastSyncTime) {
+        const diff = Math.round((new Date() - lastSyncTime) / 1000);
+        const min = Math.floor(diff / 60);
+        if (min > 0) userDropdownSync.textContent = `✓ ${min}分钟前已同步`;
+        else userDropdownSync.textContent = '✓ 已同步';
+        userDropdownSync.className = 'user-dropdown-sync synced';
+    } else {
+        userDropdownSync.textContent = '○ 未同步';
+        userDropdownSync.className = 'user-dropdown-sync';
+    }
+}
+
+// ============================================
+// Toast
+// ============================================
+let toastTimer = null;
+function showSyncToast(message, type) {
+    syncToast.textContent = message;
+    syncToast.className = 'sync-toast show ' + (type || '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => syncToast.classList.remove('show'), 3000);
+}
+
+// ============================================
+// 认证 UI
+// ============================================
+function openAuthModal(mode) {
+    authMode = mode;
+    authError.classList.remove('visible');
+    authError.textContent = '';
+    authUsername.value = '';
+    authUsername.disabled = false;
+    authPassword.value = '';
+    authConfirmPassword.value = '';
+    authOldPassword.value = '';
+    authNewPassword.value = '';
+
+    if (mode === 'login') {
+        authModalTitle.textContent = '登录';
+        authModalSubtitle.textContent = '登录后可在多端同步数据';
+        authSubmitBtn.textContent = '登录';
+        authSwitchText.textContent = '还没有账号？';
+        authSwitchBtn.textContent = '注册';
+        authConfirmPasswordGroup.style.display = 'none';
+        authOldPasswordGroup.style.display = 'none';
+        authNewPasswordGroup.style.display = 'none';
+        authRememberLabel.style.display = 'flex';
+    } else if (mode === 'register') {
+        authModalTitle.textContent = '注册';
+        authModalSubtitle.textContent = '创建账号即可多端同步';
+        authSubmitBtn.textContent = '注册';
+        authSwitchText.textContent = '已有账号？';
+        authSwitchBtn.textContent = '登录';
+        authConfirmPasswordGroup.style.display = 'flex';
+        authOldPasswordGroup.style.display = 'none';
+        authNewPasswordGroup.style.display = 'none';
+        authRememberLabel.style.display = 'none';
+    } else if (mode === 'changePassword') {
+        authModalTitle.textContent = '修改密码';
+        authModalSubtitle.textContent = '请输入旧密码和新密码';
+        authSubmitBtn.textContent = '保存';
+        authSwitchText.textContent = '';
+        authSwitchBtn.textContent = '';
+        authConfirmPasswordGroup.style.display = 'none';
+        authOldPasswordGroup.style.display = 'flex';
+        authNewPasswordGroup.style.display = 'flex';
+        authRememberLabel.style.display = 'none';
+    }
+
+    authModalOverlay.classList.add('active');
+    setTimeout(() => authUsername.focus(), 200);
+}
+
+function closeAuthModal() {
+    authModalOverlay.classList.remove('active');
+    authMode = 'login';
+}
+
+function showAuthError(msg) {
+    authError.textContent = msg;
+    authError.classList.add('visible');
+    setTimeout(() => authError.classList.remove('visible'), 4000);
+}
+
+authBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (isLoggedIn) userDropdown.classList.toggle('open');
+    else openAuthModal('login');
+});
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.user-dropdown') && !e.target.closest('.auth-btn')) userDropdown.classList.remove('open');
+});
+
+$('authModalClose').addEventListener('click', closeAuthModal);
+authModalOverlay.addEventListener('mousedown', (e) => { if (e.target === authModalOverlay) closeAuthModal(); });
+
+authSwitchBtn.addEventListener('click', () => {
+    if (authMode === 'login') openAuthModal('register');
+    else if (authMode === 'register') openAuthModal('login');
+});
+
+authSubmitBtn.addEventListener('click', async () => {
+    const username = authUsername.value.trim();
+    const password = authPassword.value.trim();
+
+    if (!username) { showAuthError('请输入用户名'); return; }
+    if (username.length < 2) { showAuthError('用户名至少2个字符'); return; }
+
+    if (authMode === 'changePassword') {
+        const oldPwd = authOldPassword.value.trim();
+        const newPwd = authNewPassword.value.trim();
+        if (!oldPwd) { showAuthError('请输入旧密码'); return; }
+        if (!newPwd) { showAuthError('请输入新密码'); return; }
+        if (newPwd.length < 6) { showAuthError('新密码至少6位'); return; }
+        try {
+            authSubmitBtn.disabled = true;
+            authSubmitBtn.textContent = '保存中...';
+            const email = username.toLowerCase() + '@custom-tabs.local';
+            const client = window.CST.getSupabase();
+            const { error: signInErr } = await client.auth.signInWithPassword({ email, password: oldPwd });
+            if (signInErr) { showAuthError('旧密码不正确'); authSubmitBtn.disabled = false; authSubmitBtn.textContent = '保存'; return; }
+            await window.CST.changePassword(newPwd);
+            closeAuthModal();
+            showSyncToast('密码修改成功 ✓', 'success');
+        } catch (e) { showAuthError(e.message || '密码修改失败'); }
+        authSubmitBtn.disabled = false;
+        authSubmitBtn.textContent = '保存';
+        return;
+    }
+
+    if (!password) { showAuthError('请输入密码'); return; }
+    if (password.length < 6) { showAuthError('密码至少6位'); return; }
+
+    if (authMode === 'register') {
+        const confirmPwd = authConfirmPassword.value.trim();
+        if (password !== confirmPwd) { showAuthError('两次密码不一致'); return; }
+    }
+
+    try {
+        authSubmitBtn.disabled = true;
+        authSubmitBtn.textContent = authMode === 'login' ? '登录中...' : '注册中...';
+
+        let result;
+        const remember = authRememberMe.checked;
+
+        if (authMode === 'login') result = await window.CST.signIn(username, password, remember);
+        else result = await window.CST.signUp(username, password);
+
+        onLoginSuccess(result.user);
+        closeAuthModal();
+        showSyncToast('登录成功 ✓，数据将在操作后自动同步', 'success');
+        setTimeout(() => downloadFromCloud(), 500);
+    } catch (e) {
+        let msg = e.message || '操作失败';
+        if (msg.includes('Invalid login credentials')) msg = '用户名或密码错误';
+        else if (msg.includes('already registered')) msg = '该用户名已被注册';
+        else if (msg.includes('Email rate limit')) msg = '操作过于频繁，请稍后再试';
+        showAuthError(msg);
+    } finally {
+        authSubmitBtn.disabled = false;
+        authSubmitBtn.textContent = authMode === 'login' ? '登录' : '注册';
+    }
+});
+
+function onLoginSuccess(user) {
+    isLoggedIn = true;
+    currentUser = user;
+    authBtn.classList.add('logged-in');
+    authBtn.title = window.CST.getDisplayName(user);
+    userDropdownName.textContent = window.CST.getDisplayName(user);
+    updateSyncStatus();
+}
+
+$('btnSignOut').addEventListener('click', async () => {
+    if (!confirm('确定退出登录？本地数据会保留。')) return;
+    try {
+        await window.CST.signOut();
+        isLoggedIn = false;
+        currentUser = null;
+        lastSyncTime = null;
+        authBtn.classList.remove('logged-in');
+        authBtn.title = '登录';
+        userDropdown.classList.remove('open');
+        userDropdownSync.textContent = '○ 未同步';
+        userDropdownSync.className = 'user-dropdown-sync';
+        showSyncToast('已退出登录', '');
+    } catch (e) {}
+});
+
+$('btnSyncUpload').addEventListener('click', async () => {
+    userDropdown.classList.remove('open');
+    if (!isLoggedIn) { showSyncToast('请先登录', 'error'); return; }
+    isSyncing = true;
+    try {
+        await window.CST.uploadData(getSyncData());
+        lastSyncTime = new Date();
+        updateSyncStatus();
+        showSyncToast('已上传到云端 ✓', 'success');
+    } catch (e) { showSyncToast('上传失败：' + (e.message || '请检查网络'), 'error'); }
+    finally { isSyncing = false; }
+});
+
+$('btnSyncDownload').addEventListener('click', () => {
+    userDropdown.classList.remove('open');
+    if (!confirm('从云端下载将覆盖本地数据，确定继续？')) return;
+    downloadFromCloud();
+});
+
+$('btnChangePassword').addEventListener('click', () => {
+    userDropdown.classList.remove('open');
+    if (!currentUser) return;
+    authUsername.value = window.CST.getDisplayName(currentUser);
+    authUsername.disabled = true;
+    openAuthModal('changePassword');
+});
+
+// 键盘快捷键
+authUsername.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); authPassword.focus(); } });
+authPassword.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); if (authMode === 'register') authConfirmPassword.focus(); else authSubmitBtn.click(); }
+});
+authConfirmPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); authSubmitBtn.click(); } });
+authOldPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); authNewPassword.focus(); } });
+authNewPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); authSubmitBtn.click(); } });
 
 // ============================================
 // 初始化
 // ============================================
-function init() {
+async function init() {
     loadState(); loadWallpaper();
     renderEngines(); renderLinks(); renderFavorites(); renderHistory(); updateClock();
     setInterval(updateClock, 1000);
     const style = document.createElement('style');
     style.textContent = `@keyframes shake{0%,100%{transform:translateX(0)}10%,30%,50%,70%,90%{transform:translateX(-4px)}20%,40%,60%,80%{transform:translateX(4px)}}.shake{animation:shake .4s ease}`;
     document.head.appendChild(style);
+    initAuth();
     console.log('✨ 新标签页已加载');
 }
+
+async function initAuth() {
+    try {
+        if (typeof window.CST === 'undefined') { setTimeout(initAuth, 500); return; }
+        const user = await window.CST.getCurrentUser();
+        if (user) { onLoginSuccess(user); console.log('🔑 已恢复登录状态:', window.CST.getDisplayName(user)); }
+    } catch (e) { console.log('🔑 未登录（离线或首次使用）'); }
+    try {
+        window.CST.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_OUT') {
+                isLoggedIn = false; currentUser = null; lastSyncTime = null;
+                authBtn.classList.remove('logged-in'); authBtn.title = '登录';
+                userDropdownSync.textContent = '○ 未同步'; userDropdownSync.className = 'user-dropdown-sync';
+            } else if (event === 'SIGNED_IN' && !isLoggedIn) {
+                if (session?.user) onLoginSuccess(session.user);
+            }
+        });
+    } catch (e) {}
+}
+
 document.addEventListener('DOMContentLoaded', init);
