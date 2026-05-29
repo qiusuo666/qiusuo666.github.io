@@ -171,8 +171,8 @@ body {
     max-width: 480px;
     width: 85%;
     background: var(--bg-secondary);
-    backdrop-filter: var(--bg-blur);
-    -webkit-backdrop-filter: var(--bg-blur);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
     padding: 4px 4px;
@@ -225,8 +225,8 @@ body {
     position: absolute;
     top: calc(100% + 6px); left: 0; min-width: 160px;
     background: rgba(30, 30, 50, 0.95);
-    backdrop-filter: var(--bg-blur);
-    -webkit-backdrop-filter: var(--bg-blur);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     padding: 4px; opacity: 0; pointer-events: none;
@@ -378,37 +378,36 @@ body {
 
 /* ===== 背景面板 ===== */
 .bg-panel {
-    position: fixed; top: 0; right: -380px; width: 360px; height: 100vh;
-    background: rgba(20, 20, 35, 0.98); backdrop-filter: var(--bg-blur);
-    -webkit-backdrop-filter: var(--bg-blur);
+    position: fixed; top: 0; right: -340px; width: 320px; height: 100vh;
+    background: rgba(20, 20, 35, 0.98);
     border-left: 1px solid var(--border-color); z-index: 100;
     transition: right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-    display: flex; flex-direction: column; padding: 20px;
+    display: flex; flex-direction: column; padding: 16px;
 }
 .bg-panel.open { right: 0; }
 
 .bg-panel-header {
     display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 20px; padding-bottom: 14px;
+    margin-bottom: 12px; padding-bottom: 10px;
     border-bottom: 1px solid var(--border-color);
 }
-.bg-panel-header span { font-size: 18px; font-weight: 600; }
+.bg-panel-header span { font-size: 16px; font-weight: 600; }
 .bg-panel-close {
     background: none; border: none; color: var(--text-tertiary); cursor: pointer;
     padding: 4px; border-radius: 50%; transition: var(--transition-fast);
     display: flex; align-items: center; justify-content: center;
 }
 .bg-panel-close:hover { background: rgba(255, 255, 255, 0.08); color: var(--text-primary); }
-.bg-panel-close svg { width: 24px; height: 24px; }
+.bg-panel-close svg { width: 20px; height: 20px; }
 
 .bg-panel-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
-    overflow-y: auto; flex: 1; padding-bottom: 16px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    overflow-y: auto; flex: 1; padding-bottom: 12px;
     scrollbar-width: none;
 }
 .bg-panel-grid::-webkit-scrollbar { display: none; }
 
-.bg-panel-footer { border-top: 1px solid var(--border-color); padding-top: 14px; }
+.bg-panel-footer { border-top: 1px solid var(--border-color); padding-top: 12px; }
 
 .bg-upload-btn {
     display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -420,24 +419,20 @@ body {
 
 .bg-preview {
     position: relative; border-radius: var(--radius-sm);
-    overflow: hidden; cursor: pointer; aspect-ratio: 16/9;
+    overflow: hidden; cursor: pointer; aspect-ratio: 16/10;
     border: 2px solid transparent; transition: var(--transition-fast);
 }
 .bg-preview:hover { border-color: var(--accent); transform: scale(1.02); }
 .bg-preview.active { border-color: var(--accent-light); box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.3); }
 .bg-preview img { width: 100%; height: 100%; object-fit: cover; }
-.bg-preview .bg-preview-name {
-    position: absolute; bottom: 0; left: 0; right: 0; padding: 6px 10px;
-    background: linear-gradient(transparent, rgba(0,0,0,0.7));
-    font-size: 11px; color: white; text-align: center;
-}
+.bg-preview .bg-preview-name { display: none; }
 .bg-preview .bg-preview-badge {
-    position: absolute; top: 6px; right: 6px; width: 18px; height: 18px;
+    position: absolute; top: 6px; right: 6px; width: 20px; height: 20px;
     border-radius: 50%; background: var(--accent); display: flex;
     align-items: center; justify-content: center; opacity: 0; transition: var(--transition-fast);
 }
 .bg-preview.active .bg-preview-badge { opacity: 1; }
-.bg-preview-badge svg { width: 10px; height: 10px; color: white; }
+.bg-preview-badge svg { width: 11px; height: 11px; color: white; }
 
 .bg-preview .bg-delete-btn {
     position: absolute; top: 6px; left: 6px; width: 22px; height: 22px;
