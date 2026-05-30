@@ -150,7 +150,7 @@ const searchBox = document.querySelector('.search-box');
 searchInput.addEventListener('focus', () => { searchBox.classList.add('focused'); });
 searchInput.addEventListener('blur', () => { searchBox.classList.remove('focused'); });
 searchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSearch(searchInput.value); } });
-searchBtn.addEventListener('click', () => { doSearch(searchInput.value); });
+searchBtn.addEventListener('mousedown', (e) => { e.preventDefault(); doSearch(searchInput.value); });
 searchInput.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeSuggestions(); searchInput.blur(); } });
 
 let suggestTimer = null;
@@ -240,9 +240,6 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { modalOve
 document.addEventListener('mousedown', (e) => { if (!e.target.closest('.context-menu')) closeContextMenu(); });
 linksContainer.addEventListener('contextmenu', (e) => { if (e.target.closest('.link-card') || e.target.closest('.cat-header')) e.preventDefault(); });
 
-// ============================================
-// 快捷栏
-// ============================================
 function renderFavorites() {
     favoritesTrack.querySelectorAll('.fav-card').forEach(el => el.remove());
     if (STATE.favorites.length === 0) { favDropHint.style.display = 'block'; return; }
@@ -266,9 +263,6 @@ favoritesTrack.addEventListener('dragleave', (e) => { if (!e.target.closest('#fa
 favoritesTrack.addEventListener('drop', (e) => { e.preventDefault(); favoritesTrack.classList.remove('drag-over'); if (!STATE.dragData || STATE.dragData.fromFavorites) return; const fromCat = STATE.categories.find(c => c.id === STATE.dragData.catId); if (!fromCat) return; const li = fromCat.links.find(l => l.id === STATE.dragData.linkId); if (!li || STATE.favorites.find(f => f.id === li.id)) return; STATE.favorites.push({ id: li.id, name: li.name, url: li.url }); saveState(); renderFavorites(); });
 favoritesTrack.addEventListener('wheel', (e) => { if (favoritesTrack.scrollWidth <= favoritesTrack.clientWidth) return; e.preventDefault(); favoritesTrack.scrollLeft += e.deltaY + e.deltaX; });
 
-// ============================================
-// 壁纸
-// ============================================
 const PRESET_BG = [
     { file: 'wallhaven-yqvj5g_3840x2160.jpg', name: '梵高·星空' },
     { file: 'wallhaven-7pje5o_3840x2160.jpg', name: '暮光森林' },
@@ -309,9 +303,6 @@ bgPanelClose.addEventListener('click', () => bgPanel.classList.remove('open'));
 document.addEventListener('mousedown', (e) => { if (bgPanel.classList.contains('open') && !e.target.closest('.bg-panel') && !e.target.closest('.bg-settings-btn')) bgPanel.classList.remove('open'); });
 bgFileInput.addEventListener('change', () => { const file = bgFileInput.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { const dataURL = reader.result; customBgFiles.push({ name: file.name.replace(/\.[^.]+$/, ''), dataURL }); if (customBgFiles.length > 10) customBgFiles.shift(); localStorage.setItem('cst_custom_bg', JSON.stringify(customBgFiles)); setWallpaper(dataURL); loadWallpaper(); renderBgPanel(); }; reader.readAsDataURL(file); bgFileInput.value = ''; });
 
-// ============================================
-// 粒子
-// ============================================
 (function() {
     const canvas = document.getElementById('cursorCanvas');
     if (!canvas) return;
@@ -374,10 +365,7 @@ bgFileInput.addEventListener('change', () => { const file = bgFileInput.files[0]
     requestAnimationFrame(draw);
 })();
 
-// ============================================
-// 云端同步
-// ============================================
-function getSyncData() { return { categories: STATE.categories, favorites: STATE.favorites, history: STATE.history, currentEngine: STATE.currentEngine, wallpaper: localStorage.getItem('cst_wallpaper') || null }; }
+function getSyncData() { return { categories: STATE.categories, favorites: STATE.favorites, history: STATE.history, currentEngine: STATE.currentEngine }; }
 
 function applyCloudData(data) {
     if (!data) return;
@@ -385,7 +373,6 @@ function applyCloudData(data) {
     if (data.favorites) STATE.favorites = data.favorites;
     if (data.history) STATE.history = data.history;
     if (data.currentEngine !== undefined) STATE.currentEngine = data.currentEngine;
-    if (data.wallpaper && !data.wallpaper.startsWith('data:')) setWallpaper(data.wallpaper);
     try { localStorage.setItem('cst_data', JSON.stringify({ categories: STATE.categories, history: STATE.history, currentEngine: STATE.currentEngine, favorites: STATE.favorites })); } catch (e) {}
     lastSyncTime = new Date(); updateSyncStatus();
 }
@@ -417,9 +404,6 @@ function updateSyncStatus() {
 let toastTimer = null;
 function showSyncToast(message, type) { syncToast.textContent = message; syncToast.className = 'sync-toast show ' + (type || ''); clearTimeout(toastTimer); toastTimer = setTimeout(() => syncToast.classList.remove('show'), 3000); }
 
-// ============================================
-// 认证 UI
-// ============================================
 function openAuthModal(mode) {
     authMode = mode; authError.classList.remove('visible'); authError.textContent = '';
     authUsername.value = ''; authUsername.disabled = false; authPassword.value = '';
