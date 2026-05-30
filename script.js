@@ -411,9 +411,19 @@ function renderFavorites() {
         const card = document.createElement('a'); card.className = 'fav-card'; card.href = fav.url; card.target = '_blank'; card.dataset.id = fav.id; card.draggable = true;
         card.innerHTML = `<div class="fav-icon" style="background:${getColorForName(fav.name)}">${fav.name.charAt(0).toUpperCase()}</div><span class="fav-name">${fav.name}</span><div class="fav-remove" data-id="${fav.id}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></div>`;
         card.querySelector('.fav-remove').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); STATE.favorites = STATE.favorites.filter(f => f.id !== fav.id); saveState(); renderFavorites(); });
+        card.addEventListener('dragstart', (e) => { STATE.dragData = { linkId: fav.id, fromFavorites: true }; card.style.opacity = '0.3'; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', fav.id); });
+        card.addEventListener('dragend', () => { card.style.opacity = ''; STATE.dragData = null; });
+        card.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+        card.addEventListener('dragenter', (e) => { e.preventDefault(); card.classList.add('drag-target'); });
+        card.addEventListener('dragleave', () => { card.classList.remove('drag-target'); });
+        card.addEventListener('drop', (e) => { e.preventDefault(); card.classList.remove('drag-target'); if (!STATE.dragData) return; const fromId = STATE.dragData.linkId; const toId = fav.id; if (fromId === toId) return;
+            if (STATE.dragData.fromFavorites) { const fromIdx = STATE.favorites.findIndex(f => f.id === fromId); const toIdx = STATE.favorites.findIndex(f => f.id === toId); if (fromIdx === -1 || toIdx === -1) return; const [moved] = STATE.favorites.splice(fromIdx, 1); STATE.favorites.splice(toIdx, 0, moved); } else { const fromCat = STATE.categories.find(c => c.id === STATE.dragData.catId); if (!fromCat) return; const li = fromCat.links.find(l => l.id === STATE.dragData.linkId); if (!li || STATE.favorites.find(f => f.id === li.id)) return; const toIdx = STATE.favorites.findIndex(f => f.id === toId); STATE.favorites.splice(toIdx, 0, { id: li.id, name: li.name, url: li.url }); } saveState(); renderFavorites(); });
         favoritesTrack.appendChild(card);
     });
 }
+favoritesTrack.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; favoritesTrack.classList.add('drag-over'); });
+favoritesTrack.addEventListener('dragleave', (e) => { if (!e.target.closest('#favoritesTrack')) favoritesTrack.classList.remove('drag-over'); });
+favoritesTrack.addEventListener('drop', (e) => { e.preventDefault(); favoritesTrack.classList.remove('drag-over'); if (!STATE.dragData || STATE.dragData.fromFavorites) return; const fromCat = STATE.categories.find(c => c.id === STATE.dragData.catId); if (!fromCat) return; const li = fromCat.links.find(l => l.id === STATE.dragData.linkId); if (!li || STATE.favorites.find(f => f.id === li.id)) return; STATE.favorites.push({ id: li.id, name: li.name, url: li.url }); saveState(); renderFavorites(); });
 favoritesTrack.addEventListener('wheel', (e) => { if (favoritesTrack.scrollWidth <= favoritesTrack.clientWidth) return; e.preventDefault(); favoritesTrack.scrollLeft += e.deltaY + e.deltaX; });
 
 // ============================================
@@ -782,10 +792,9 @@ authSubmitBtn.addEventListener('click', async () => {
         if (authMode === 'login') result = await window.CST.signIn(username, password, remember);
         else result = await window.CST.signUp(username, password);
 
-        onLoginSuccess(result.user);
+        onLoginSuccess(result.user, { download: true });
         closeAuthModal();
         showSyncToast('登录成功 ✓，数据将在操作后自动同步', 'success');
-        setTimeout(() => downloadFromCloud(), 500);
     } catch (e) {
         let msg = e.message || '操作失败';
         if (msg.includes('Invalid login credentials')) msg = '用户名或密码错误';
@@ -798,13 +807,14 @@ authSubmitBtn.addEventListener('click', async () => {
     }
 });
 
-function onLoginSuccess(user) {
+function onLoginSuccess(user, { download = false } = {}) {
     isLoggedIn = true;
     currentUser = user;
     authBtn.classList.add('logged-in');
     authBtn.title = window.CST.getDisplayName(user);
     userDropdownName.textContent = window.CST.getDisplayName(user);
     updateSyncStatus();
+    if (download) setTimeout(() => downloadFromCloud(), 500);
 }
 
 $('btnSignOut').addEventListener('click', async () => {
@@ -877,7 +887,7 @@ async function initAuth() {
     try {
         if (typeof window.CST === 'undefined') { setTimeout(initAuth, 500); return; }
         const user = await window.CST.getCurrentUser();
-        if (user) { onLoginSuccess(user); console.log('🔑 已恢复登录状态:', window.CST.getDisplayName(user)); }
+        if (user) { onLoginSuccess(user, { download: true }); console.log('🔑 已恢复登录状态:', window.CST.getDisplayName(user)); }
     } catch (e) { console.log('🔑 未登录（离线或首次使用）'); }
     try {
         window.CST.onAuthStateChange((event, session) => {
