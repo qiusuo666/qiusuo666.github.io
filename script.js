@@ -248,7 +248,7 @@ const searchBox = document.querySelector('.search-box');
 searchInput.addEventListener('focus', () => { searchBox.classList.add('focused'); });
 searchInput.addEventListener('blur', () => { searchBox.classList.remove('focused'); });
 searchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSearch(searchInput.value); } });
-searchBtn.addEventListener('click', () => { doSearch(searchInput.value); });
+searchBtn.addEventListener('mousedown', (e) => { e.preventDefault(); doSearch(searchInput.value); });
 searchInput.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeSuggestions(); searchInput.blur(); } });
 
 let suggestTimer = null;
@@ -594,8 +594,7 @@ function getSyncData() {
         categories: STATE.categories,
         favorites: STATE.favorites,
         history: STATE.history,
-        currentEngine: STATE.currentEngine,
-        wallpaper: localStorage.getItem('cst_wallpaper') || null
+        currentEngine: STATE.currentEngine
     };
 }
 
@@ -605,7 +604,6 @@ function applyCloudData(data) {
     if (data.favorites) STATE.favorites = data.favorites;
     if (data.history) STATE.history = data.history;
     if (data.currentEngine !== undefined) STATE.currentEngine = data.currentEngine;
-    if (data.wallpaper && !data.wallpaper.startsWith('data:')) setWallpaper(data.wallpaper);
     try { localStorage.setItem('cst_data', JSON.stringify({ categories: STATE.categories, history: STATE.history, currentEngine: STATE.currentEngine, favorites: STATE.favorites })); } catch (e) {}
     lastSyncTime = new Date();
     updateSyncStatus();
