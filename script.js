@@ -782,10 +782,9 @@ authSubmitBtn.addEventListener('click', async () => {
         if (authMode === 'login') result = await window.CST.signIn(username, password, remember);
         else result = await window.CST.signUp(username, password);
 
-        onLoginSuccess(result.user);
+        onLoginSuccess(result.user, { download: true });
         closeAuthModal();
         showSyncToast('登录成功 ✓，数据将在操作后自动同步', 'success');
-        setTimeout(() => downloadFromCloud(), 500);
     } catch (e) {
         let msg = e.message || '操作失败';
         if (msg.includes('Invalid login credentials')) msg = '用户名或密码错误';
@@ -798,13 +797,14 @@ authSubmitBtn.addEventListener('click', async () => {
     }
 });
 
-function onLoginSuccess(user) {
+function onLoginSuccess(user, { download = false } = {}) {
     isLoggedIn = true;
     currentUser = user;
     authBtn.classList.add('logged-in');
     authBtn.title = window.CST.getDisplayName(user);
     userDropdownName.textContent = window.CST.getDisplayName(user);
     updateSyncStatus();
+    if (download) setTimeout(() => downloadFromCloud(), 500);
 }
 
 $('btnSignOut').addEventListener('click', async () => {
@@ -877,7 +877,7 @@ async function initAuth() {
     try {
         if (typeof window.CST === 'undefined') { setTimeout(initAuth, 500); return; }
         const user = await window.CST.getCurrentUser();
-        if (user) { onLoginSuccess(user); console.log('🔑 已恢复登录状态:', window.CST.getDisplayName(user)); }
+        if (user) { onLoginSuccess(user, { download: true }); console.log('🔑 已恢复登录状态:', window.CST.getDisplayName(user)); }
     } catch (e) { console.log('🔑 未登录（离线或首次使用）'); }
     try {
         window.CST.onAuthStateChange((event, session) => {
