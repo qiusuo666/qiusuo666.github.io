@@ -517,6 +517,28 @@ body {
 .form-input { width: 100%; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--border-color); border-radius: var(--radius-xs); padding: 12px 16px; font-size: 15px; color: var(--text-primary); font-family: inherit; transition: var(--transition-fast); outline: none; }
 .form-input::placeholder { color: var(--text-tertiary); }
 .form-input:focus { border-color: var(--accent); background: rgba(255, 255, 255, 0.08); box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1); }
+
+/* select 下拉框样式 */
+select.form-input {
+    color: var(--text-primary);
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff80'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+    padding-right: 36px;
+}
+select.form-input option {
+    background: rgba(30, 30, 50, 0.98);
+    color: var(--text-primary);
+}
+select.form-input:focus {
+    border-color: var(--accent);
+    background-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1);
+}
 .modal-footer { display: flex; gap: 10px; padding: 0 28px 24px; justify-content: flex-end; }
 
 .btn { padding: 10px 24px; border-radius: var(--radius-xs); font-size: 14px; font-weight: 500; cursor: pointer; transition: var(--transition-fast); font-family: inherit; border: none; }
@@ -551,8 +573,11 @@ body {
 .cat-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--text-primary); }
 .cat-btn.cat-delete:hover { color: #ff6b6b; background: rgba(255, 107, 107, 0.1); }
 
+.links-header-btns { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; }
 .add-cat-btn { background: rgba(108, 92, 231, 0.1); border: 1px solid rgba(108, 92, 231, 0.2); color: var(--accent-light); padding: 6px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: var(--transition-fast); margin-top: 8px; }
 .add-cat-btn:hover { background: rgba(108, 92, 231, 0.2); border-color: var(--accent); transform: translateY(-1px); }
+.import-export-btn { background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.1); color: var(--text-secondary); }
+.import-export-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--text-primary); }
 
 .links-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 12px; }
 

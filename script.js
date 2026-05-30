@@ -98,6 +98,10 @@ const formLinkUrl = $('formLinkUrl');
 const formCatName = $('formCatName');
 const linkForm = $('linkForm');
 const catForm = $('catForm');
+const linkCatSelect = $('linkCatSelect');
+const importBtn = $('importBtn');
+const exportBtn = $('exportBtn');
+const importFileInput = $('importFileInput');
 
 // ============================================
 // 工具
@@ -357,7 +361,28 @@ function handleDropOnCategory(targetCatId) {
 }
 
 function removeLink(linkId, catId) { const cat = STATE.categories.find(c => c.id === catId); if (!cat) return; cat.links = cat.links.filter(l => l.id !== linkId); saveState(); renderLinks(); }
-function addOrEditLink(name, url) { const cat = STATE.categories.find(c => c.id === STATE.editCatId); if (!cat) return; if (STATE.editLinkId) { const idx = cat.links.findIndex(l => l.id === STATE.editLinkId); if (idx !== -1) { cat.links[idx].name = name; cat.links[idx].url = url; } } else { cat.links.push({ id: generateId(), name, url }); } saveState(); renderLinks(); closeModal(); }
+function addOrEditLink(name, url) {
+    const targetCatId = STATE.editLinkId ? (linkCatSelect ? linkCatSelect.value : STATE.editCatId) : STATE.editCatId;
+    const cat = STATE.categories.find(c => c.id === targetCatId);
+    if (!cat) return;
+    if (STATE.editLinkId) {
+        const originalCat = STATE.categories.find(c => c.id === STATE.editCatId);
+        const originalIdx = originalCat?.links.findIndex(l => l.id === STATE.editLinkId);
+        if (originalIdx !== -1) {
+            const link = originalCat.links[originalIdx];
+            link.name = name;
+            link.url = url;
+            // 如果分类变了，移动链接
+            if (targetCatId !== STATE.editCatId) {
+                originalCat.links.splice(originalIdx, 1);
+                cat.links.push(link);
+            }
+        }
+    } else {
+        cat.links.push({ id: generateId(), name, url });
+    }
+    saveState(); renderLinks(); closeModal();
+}
 function openCatRenameModal(catId) { const cat = STATE.categories.find(c => c.id === catId); if (!cat) return; STATE.editCatId = catId; catNameInput.value = cat.name; modalTitle.textContent = '重命名分类'; modalConfirm.textContent = '保存'; linkForm.style.display = 'none'; catForm.style.display = 'block'; openModal(); }
 function saveCatName(name) { const cat = STATE.categories.find(c => c.id === STATE.editCatId); if (!cat) return; cat.name = name; saveState(); renderLinks(); closeModal(); }
 function createNewCategory() { STATE.editCatId = null; catNameInput.value = ''; modalTitle.textContent = '新建分类'; modalConfirm.textContent = '创建'; linkForm.style.display = 'none'; catForm.style.display = 'block'; openModal(); }
@@ -380,18 +405,31 @@ catNameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.pre
 // ============================================
 // 右键菜单
 // ============================================
+function populateCatSelect(selectedCatId) {
+    linkCatSelect.innerHTML = STATE.categories.map(c =>
+        `<option value="${c.id}" ${c.id === selectedCatId ? 'selected' : ''}>${c.name}</option>`
+    ).join('');
+}
+
 function showContextMenu(x, y, linkId, catId) {
     contextItems.innerHTML = '';
-    if (linkId) { contextItems.innerHTML += '<div class="context-item danger" data-action="delete-link">删除此网址</div><div class="context-item" data-action="edit-link">编辑网址</div>'; }
-    if (catId) { contextItems.innerHTML += '<div class="context-item" data-action="rename-cat">重命名分类</div>'; if (catId !== STATE.defaultCategoryId) contextItems.innerHTML += '<div class="context-item danger" data-action="delete-cat">删除分类</div>'; }
+    if (linkId) {
+        contextItems.innerHTML += '<div class="context-item danger" data-action="delete-link">删除此网址</div>';
+        contextItems.innerHTML += '<div class="context-item" data-action="edit-link">编辑网址</div>';
+        if (!STATE.favorites.some(f => f.id === linkId)) {
+            contextItems.innerHTML += '<div class="context-item" data-action="add-favorite">添加到常用</div>';
+        }
+    }
+    if (catId && !linkId) { contextItems.innerHTML += '<div class="context-item" data-action="rename-cat">重命名分类</div>'; if (catId !== STATE.defaultCategoryId) contextItems.innerHTML += '<div class="context-item danger" data-action="delete-cat">删除分类</div>'; }
     contextMenu.style.left = x + 'px'; contextMenu.style.top = y + 'px';
     const rect = contextMenu.getBoundingClientRect(); if (rect.right > window.innerWidth) contextMenu.style.left = (x - rect.width) + 'px'; if (rect.bottom > window.innerHeight) contextMenu.style.top = (y - rect.height) + 'px';
     contextMenu.classList.add('active');
     contextItems.querySelectorAll('.context-item').forEach(el => { el.addEventListener('click', () => { const action = el.dataset.action;
         if (action === 'delete-link' && STATE.contextLinkId && STATE.contextCatId) removeLink(STATE.contextLinkId, STATE.contextCatId);
-        else if (action === 'edit-link' && STATE.contextLinkId && STATE.contextCatId) { const cat = STATE.categories.find(c => c.id === STATE.contextCatId); const link = cat?.links.find(l => l.id === STATE.contextLinkId); if (link) { STATE.editLinkId = link.id; STATE.editCatId = STATE.contextCatId; linkNameInput.value = link.name; linkUrlInput.value = link.url; modalTitle.textContent = '编辑网址'; modalConfirm.textContent = '保存'; linkForm.style.display = 'block'; catForm.style.display = 'none'; openModal(); } }
+        else if (action === 'edit-link' && STATE.contextLinkId && STATE.contextCatId) { const cat = STATE.categories.find(c => c.id === STATE.contextCatId); const link = cat?.links.find(l => l.id === STATE.contextLinkId); if (link) { STATE.editLinkId = link.id; STATE.editCatId = STATE.contextCatId; linkNameInput.value = link.name; linkUrlInput.value = link.url; populateCatSelect(STATE.contextCatId); linkCatGroup.style.display = 'block'; modalTitle.textContent = '编辑网址'; modalConfirm.textContent = '保存'; linkForm.style.display = 'block'; catForm.style.display = 'none'; openModal(); } }
+        else if (action === 'add-favorite' && STATE.contextLinkId && STATE.contextCatId) { const cat2 = STATE.categories.find(c => c.id === STATE.contextCatId); const li = cat2?.links.find(l => l.id === STATE.contextLinkId); if (li && !STATE.favorites.find(f => f.id === li.id)) { STATE.favorites.push({ id: li.id, name: li.name, url: li.url }); saveState(); renderFavorites(); } }
         else if (action === 'rename-cat' && STATE.contextCatId) openCatRenameModal(STATE.contextCatId);
-        else if (action === 'delete-cat' && STATE.contextCatId) { const cat2 = STATE.categories.find(c => c.id === STATE.contextCatId); if (cat2 && confirm(`确定删除分类「${cat2.name}」及其所有网址？`)) { STATE.categories = STATE.categories.filter(c => c.id !== STATE.contextCatId); saveState(); renderLinks(); } }
+        else if (action === 'delete-cat' && STATE.contextCatId) { const cat3 = STATE.categories.find(c => c.id === STATE.contextCatId); if (cat3 && confirm(`确定删除分类「${cat3.name}」及其所有网址？`)) { STATE.categories = STATE.categories.filter(c => c.id !== STATE.contextCatId); saveState(); renderLinks(); } }
         closeContextMenu();
     }); });
 }
@@ -983,5 +1021,196 @@ document.addEventListener('touchmove', (e) => {
     if (canvas.dataset.inited === 'true') return;
     canvas.dataset.inited = 'true';
 })();
+
+// ============================================
+// 书签导入导出
+// ============================================
+
+function htmlEscape(str) {
+    return str.replace(/&/g, '&').replace(/"/g, '"').replace(/</g, '<').replace(/>/g, '>');
+}
+
+function exportBookmarks() {
+    const lines = [
+        '<!DOCTYPE NETSCAPE-Bookmark-file-1>',
+        '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">',
+        '<TITLE>Custom Tabs 书签备份</TITLE>',
+        '<H1>Custom Tabs 书签备份</H1>',
+        '<DL><p>'
+    ];
+
+    // 输出分类
+    STATE.categories.forEach(cat => {
+        lines.push(`    <DT><H3>${htmlEscape(cat.name)}</H3>`);
+        lines.push('    <DL><p>');
+        cat.links.forEach(link => {
+            lines.push(`        <DT><A HREF="${htmlEscape(link.url)}">${htmlEscape(link.name)}</A>`);
+        });
+        lines.push('    </DL><p>');
+    });
+
+    // 输出常用栏
+    if (STATE.favorites.length > 0) {
+        lines.push('    <DT><H3>★ 常用</H3>');
+        lines.push('    <DL><p>');
+        STATE.favorites.forEach(fav => {
+            lines.push(`        <DT><A HREF="${htmlEscape(fav.url)}">${htmlEscape(fav.name)}</A>`);
+        });
+        lines.push('    </DL><p>');
+    }
+
+    lines.push('</DL><p>');
+
+    const html = lines.join('\n');
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `CustomTabs_书签备份_${dateStr}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showSyncToast('书签已导出 ✓', 'success');
+}
+
+function importBookmarks(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const html = e.target.result;
+            const lines = html.split(/\r?\n/);
+            const categories = [];  // [{ name, links: [] }]
+            let currentFolder = null;
+            const seen = new Set();
+            let currentFolderLinks = null;
+            let orphanLinks = [];
+
+            function finishFolder() {
+                if (currentFolder && currentFolderLinks && currentFolderLinks.length > 0) {
+                    categories.push({ name: currentFolder, links: currentFolderLinks });
+                } else if (currentFolderLinks && currentFolderLinks.length > 0) {
+                    orphanLinks = orphanLinks.concat(currentFolderLinks);
+                }
+            }
+
+            // 正则：匹配 <DT><H3 ...>名称</H3> (同级或不同行)
+            const h3Regex = /<H3[^>]*>([^<]+)<\/H3>/i;
+            // 正则：匹配 <A HREF="url" ...>text</A>
+            const aRegex = /<A\s[^>]*?HREF\s*=\s*"([^"]+)"[^>]*>\s*([^<]*?)\s*<\/A>/i;
+
+            for (const line of lines) {
+                // 检查是否包含 H3（文件夹）
+                const h3Match = line.match(h3Regex);
+                if (h3Match) {
+                    finishFolder();
+                    currentFolder = h3Match[1].trim();
+                    // 跳过浏览器内置文件夹
+                    if (currentFolder === '收藏夹栏' || currentFolder === '书签栏' || currentFolder === '其他书签') {
+                        currentFolder = null;
+                    }
+                    currentFolderLinks = [];
+                    continue;
+                }
+
+                // 检查是否包含 A 标签
+                const aMatch = line.match(aRegex);
+                if (aMatch) {
+                    const url = aMatch[1].trim();
+                    let name = aMatch[2].trim();
+                    if (!url || !(url.startsWith('http://') || url.startsWith('https://'))) continue;
+                    if (!name) name = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+                    const key = url;
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        const link = { id: generateId(), name: name.substring(0, 20) || url, url: url };
+                        if (currentFolderLinks) {
+                            currentFolderLinks.push(link);
+                        } else {
+                            orphanLinks.push(link);
+                        }
+                    }
+                }
+            }
+
+            // 处理最后一个文件夹
+            finishFolder();
+
+            // 尝试另一种解析：合并连续多行的 A 标签正则（处理 div 换行情况）
+            if (categories.length === 0 && orphanLinks.length === 0) {
+                const aRegexGlobal = /<A\s[^>]*?HREF\s*=\s*"([^"]+)"[^>]*?>\s*([\s\S]*?)\s*<\/A>/gi;
+                let m;
+                while ((m = aRegexGlobal.exec(html)) !== null) {
+                    const url = m[1].trim();
+                    let name = m[2].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+                    if (!url || !(url.startsWith('http://') || url.startsWith('https://'))) continue;
+                    if (!name) name = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+                    const key = url;
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        orphanLinks.push({ id: generateId(), name: name.substring(0, 20) || url, url: url });
+                    }
+                }
+            }
+
+            const totalLinks = categories.reduce((s, c) => s + c.links.length, 0) + orphanLinks.length;
+            if (totalLinks === 0) {
+                showSyncToast('未找到可导入的链接', 'error');
+                return;
+            }
+
+            // 合并到现有分类
+            categories.forEach(nc => {
+                const existing = STATE.categories.find(c => c.name === nc.name);
+                if (existing) {
+                    existing.links = existing.links.concat(nc.links);
+                } else {
+                    STATE.categories.push({ id: generateId(), name: nc.name, links: nc.links });
+                }
+            });
+
+            // 孤儿链接 → "未分类" 或用文件名
+            if (orphanLinks.length > 0) {
+                const catName = file.name.replace(/\.[^.]+$/, '').substring(0, 15) || '导入书签';
+                const existing = STATE.categories.find(c => c.name === catName);
+                if (existing) {
+                    existing.links = existing.links.concat(orphanLinks);
+                } else if (categories.length === 0) {
+                    STATE.categories.push({ id: generateId(), name: catName, links: orphanLinks });
+                } else {
+                    const uncat = STATE.categories.find(c => c.name === '未分类');
+                    if (uncat) uncat.links = uncat.links.concat(orphanLinks);
+                    else STATE.categories.push({ id: generateId(), name: '未分类', links: orphanLinks });
+                }
+            }
+
+            saveState();
+            renderLinks();
+            const catCount = categories.length + (orphanLinks.length > 0 && categories.length === 0 ? 1 : 0);
+            showSyncToast(`已导入 ${totalLinks} 个链接、${catCount} 个分类 ✓`, 'success');
+        } catch (err) {
+            showSyncToast('导入失败：' + (err.message || '格式不兼容'), 'error');
+            console.error('importBookmarks error:', err);
+        }
+    };
+    reader.readAsText(file, 'UTF-8');
+}
+
+importBtn.addEventListener('click', () => {
+    importFileInput.click();
+});
+
+importFileInput.addEventListener('change', () => {
+    const file = importFileInput.files[0];
+    if (!file) return;
+    importBookmarks(file);
+    importFileInput.value = '';
+});
+
+exportBtn.addEventListener('click', () => {
+    exportBookmarks();
+});
 
 document.addEventListener('DOMContentLoaded', init);

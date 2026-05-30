@@ -55,8 +55,13 @@
     <div class="links-view" id="linksView">
         <div class="links-header">
             <h2>快捷网址</h2>
-            <button class="add-cat-btn" id="addCategoryBtn">+ 新建分类</button>
+            <div class="links-header-btns">
+                <button class="add-cat-btn" id="addCategoryBtn">+ 新建分类</button>
+                <button class="add-cat-btn import-export-btn" id="importBtn" title="导入书签">📥 导入</button>
+                <button class="add-cat-btn import-export-btn" id="exportBtn" title="导出书签">📤 导出</button>
+            </div>
         </div>
+        <input type="file" id="importFileInput" accept=".html,.htm" hidden>
         <div class="links-container" id="linksContainer"></div>
         <div class="links-footer-hint links-view-bg"></div>
     </div>
@@ -79,6 +84,10 @@
                     <div class="form-group">
                         <label>网址 (URL)</label>
                         <input type="text" class="form-input" id="linkUrl" placeholder="例如：https://github.com">
+                    </div>
+                    <div class="form-group" id="linkCatGroup">
+                        <label>选择分类</label>
+                        <select class="form-input" id="linkCatSelect"></select>
                     </div>
                 </div>
                 <div id="catForm" style="display:none;">
