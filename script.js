@@ -900,4 +900,88 @@ async function initAuth() {
     } catch (e) {}
 }
 
+// ============================================
+// 移动端交互
+// ============================================
+
+// 移动端快捷网址按钮
+$('mobileLinksBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    showLinksView();
+});
+
+// 移动端快捷网址返回主界面（点击空白区域）
+document.addEventListener('touchstart', (e) => {
+    if (linksView.classList.contains('active') && (e.target === linksView || e.target === linksContainer || e.target.closest('.links-view-bg') || e.target.closest('.links-footer-hint'))) {
+        showMainView();
+    }
+}, { passive: true });
+
+// 长按检测（500ms）
+let longPressTimer = null;
+let longPressTarget = null;
+
+document.addEventListener('touchstart', (e) => {
+    if (modalOverlay.classList.contains('active')) return;
+    if (authModalOverlay.classList.contains('active')) return;
+    if (e.target.closest('input') || e.target.closest('.search-engine-selector')) return;
+
+    const target = e.target.closest('.link-card');
+    if (target) {
+        longPressTarget = target;
+        longPressTimer = setTimeout(() => {
+            if (longPressTarget === target) {
+                e.preventDefault();
+                const linkId = target.dataset.id;
+                const catId = target.dataset.catId;
+                STATE.contextLinkId = linkId;
+                STATE.contextCatId = catId;
+                const rect = target.getBoundingClientRect();
+                showContextMenu(rect.left + rect.width / 2, rect.top + rect.height / 2, linkId, catId);
+                // 振动反馈
+                if (navigator.vibrate) navigator.vibrate(20);
+            }
+        }, 500);
+    } else if (e.target.closest('.main-view') && !e.target.closest('.auth-btn') && !e.target.closest('.bg-settings-btn') && !e.target.closest('.mobile-links-btn') && !e.target.closest('.fav-card')) {
+        longPressTarget = e.target;
+        longPressTimer = setTimeout(() => {
+            if (longPressTarget === e.target) {
+                showLinksView();
+                if (navigator.vibrate) navigator.vibrate(20);
+            }
+        }, 500);
+    }
+}, { passive: false });
+
+document.addEventListener('touchend', () => {
+    clearTimeout(longPressTimer);
+    longPressTarget = null;
+});
+
+document.addEventListener('touchmove', () => {
+    clearTimeout(longPressTimer);
+    longPressTarget = null;
+});
+
+// 触摸拖拽增强：防止触摸时页面滚动
+let touchDragActive = false;
+document.addEventListener('touchmove', (e) => {
+    if (touchDragActive) {
+        e.preventDefault();
+    }
+}, { passive: false });
+
+// 粒子数量根据屏幕自适应
+(function() {
+    const canvas = document.getElementById('cursorCanvas');
+    if (!canvas) return;
+    const numParticles = window.innerWidth <= 480 ? 40 :
+                         window.innerWidth <= 768 ? 60 :
+                         window.innerWidth <= 1024 ? 80 : 100;
+
+    // 已初始化则不重复
+    if (canvas.dataset.inited === 'true') return;
+    canvas.dataset.inited = 'true';
+})();
+
 document.addEventListener('DOMContentLoaded', init);

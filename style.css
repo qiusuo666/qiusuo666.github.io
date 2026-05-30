@@ -570,28 +570,117 @@ body {
 ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
 
-/* ===== 响应式 ===== */
-@media (max-width: 768px) {
-    .time { font-size: 56px; letter-spacing: 3px; }
-    .date { font-size: 15px; }
-    .clock-container { margin-bottom: 30px; }
-    .search-container { max-width: 90%; }
-    .search-input { font-size: 14px; padding: 10px 6px; }
-    .links-grid { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; }
-    .link-card { padding: 14px 8px 8px; min-height: 80px; }
-    .link-card .card-icon { width: 32px; height: 32px; font-size: 16px; border-radius: 10px; }
-    .links-view { padding: 12px; padding-top: 40px; }
-    .modal { width: 95%; }
-    .modal-header { padding: 20px 24px 0; }
-    .modal-body { padding: 20px 24px; }
-    .modal-footer { padding: 0 24px 20px; }
+/* ===== 响应式：平板（≤1024px）===== */
+@media (max-width: 1024px) {
+    .time { font-size: 72px; letter-spacing: 4px; }
+    .date { font-size: 16px; }
+    .clock-container { margin-bottom: 36px; }
+    .search-box { max-width: 560px; width: 90%; }
+    .search-box.focused { max-width: 620px; width: 95%; }
+    .links-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 10px; }
+    .links-view { padding: 20px 16px; padding-top: 50px; }
+    .links-header h2 { font-size: 24px; }
+    .favorites-bar { width: 92%; max-width: none; }
+    .bg-panel { width: 280px; right: -300px; }
 }
 
+/* ===== 响应式：手机横屏 / 小平板（≤768px）===== */
+@media (max-width: 768px) {
+    .time { font-size: 52px; letter-spacing: 3px; }
+    .date { font-size: 14px; }
+    .clock-container { margin-bottom: 28px; }
+    .search-container { max-width: 95%; }
+    .search-box { max-width: 100%; width: 92%; }
+    .search-box.focused { max-width: 100%; width: 95%; }
+    .search-input { font-size: 14px; padding: 10px 6px; }
+    .search-btn { width: 38px; height: 38px; }
+    .search-btn svg { width: 18px; height: 18px; }
+    .links-view { padding: 12px 10px; padding-top: 50px; }
+    .links-header { margin-bottom: 20px; }
+    .links-header h2 { font-size: 20px; }
+    .links-grid { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; }
+    .link-card { padding: 14px 6px 8px; min-height: 80px; }
+    .link-card .card-icon { width: 32px; height: 32px; font-size: 16px; border-radius: 10px; }
+    .link-card .card-name { font-size: 11px; }
+    .add-card { padding: 16px 8px; min-height: 80px; }
+    .add-card .add-icon { width: 32px; height: 32px; font-size: 20px; }
+    .modal { width: 94%; max-width: none; }
+    .modal-header { padding: 18px 20px 0; }
+    .modal-body { padding: 18px 20px; }
+    .modal-footer { padding: 0 20px 18px; }
+    .favorites-bar { width: 95%; bottom: 20px; }
+    .favorites-label { display: none; }
+    .fav-card { padding: 4px 10px; }
+    .fav-card .fav-name { max-width: 48px; font-size: 10px; }
+    .bg-settings-btn { top: 14px; right: 14px; width: 34px; height: 34px; }
+    .auth-btn { top: 14px; right: 56px; width: 34px; height: 34px; }
+    .user-dropdown { top: 54px; right: 14px; width: 180px; }
+    .bg-panel { width: 260px; right: -280px; }
+    .mobile-links-btn { display: flex; }
+    .engine-current { padding: 8px 12px; }
+}
+
+/* ===== 响应式：手机竖屏（≤480px）===== */
 @media (max-width: 480px) {
-    .time { font-size: 42px; letter-spacing: 2px; }
-    .links-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .time { font-size: 36px; letter-spacing: 2px; }
+    .date { font-size: 13px; margin-top: 8px; }
+    .clock-container { margin-bottom: 24px; }
+    .search-container { max-width: 100%; }
+    .search-box { width: 94%; padding: 3px 3px; border-radius: var(--radius-md); }
+    .search-input { font-size: 14px; padding: 10px 4px; }
+    .search-btn { width: 36px; height: 36px; }
     .engine-current span { display: none; }
-    .engine-current { padding: 8px 10px; }
+    .engine-current { padding: 8px 8px; margin-left: 1px; }
+    .engine-current img { width: 16px; height: 16px; }
+    .search-history { margin-top: 16px; }
+    .history-tag { padding: 5px 10px; font-size: 12px; }
+    .links-view { padding: 8px 4px; padding-top: 52px; padding-bottom: 80px; }
+    .links-header { margin-bottom: 14px; }
+    .links-header h2 { font-size: 18px; }
+    .add-cat-btn { padding: 5px 12px; font-size: 12px; }
+    .links-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .link-card { padding: 10px 4px 6px; min-height: 72px; }
+    .link-card .card-icon { width: 28px; height: 28px; font-size: 14px; border-radius: 8px; }
+    .link-card .card-name { font-size: 10px; }
+    .link-card .card-remove { width: 18px; height: 18px; top: -4px; right: -4px; }
+    .link-card .card-remove svg { width: 10px; height: 10px; }
+    .add-card { padding: 12px 4px; min-height: 72px; }
+    .add-card .add-icon { width: 28px; height: 28px; font-size: 18px; }
+    .add-card .add-text { font-size: 10px; }
+    .cat-section { padding: 10px; }
+    .cat-name { font-size: 14px; }
+    .cat-header { padding: 0 2px 10px; margin-bottom: 10px; }
+    .modal { width: 96%; border-radius: var(--radius-sm); }
+    .modal-header { padding: 14px 16px 0; }
+    .modal-header h3 { font-size: 17px; }
+    .modal-body { padding: 14px 16px; }
+    .modal-footer { padding: 0 16px 14px; }
+    .form-group { margin-bottom: 12px; }
+    .form-input { padding: 10px 12px; font-size: 14px; }
+    .btn { padding: 8px 18px; font-size: 13px; }
+    .favorites-bar { width: 96%; bottom: 12px; gap: 6px; }
+    .favorites-track { padding: 4px 8px; min-height: 42px; border-radius: var(--radius-sm); }
+    .fav-card { padding: 4px 8px; }
+    .fav-card .fav-icon { width: 22px; height: 22px; border-radius: 5px; font-size: 10px; }
+    .fav-card .fav-name { max-width: 40px; font-size: 10px; }
+    .fav-card .fav-remove { width: 12px; height: 12px; top: -3px; right: -3px; }
+    .fav-card .fav-remove svg { width: 7px; height: 7px; }
+    .fav-drop-hint { font-size: 10px; }
+    .bg-settings-btn { top: 10px; right: 10px; width: 30px; height: 30px; }
+    .bg-settings-btn svg { width: 15px; height: 15px; }
+    .auth-btn { top: 10px; right: 46px; width: 30px; height: 30px; }
+    .auth-btn svg { width: 15px; height: 15px; }
+    .mobile-links-btn { top: 10px; right: 82px; width: 30px; height: 30px; }
+    .user-dropdown { top: 48px; right: 8px; width: 170px; }
+    .bg-panel { width: 100%; right: -100%; }
+    .auth-modal { padding: 24px 20px 18px; max-width: 92%; }
+    .auth-modal-title { font-size: 18px; }
+    .auth-modal-subtitle { font-size: 12px; margin-bottom: 18px; }
+    .auth-modal-icon { width: 44px; height: 44px; margin-bottom: 12px; }
+    .auth-modal-icon svg { width: 22px; height: 22px; }
+    .auth-input { padding: 8px 12px; font-size: 13px; }
+    .auth-submit-btn { padding: 10px; font-size: 14px; }
+    .sync-toast { top: 60px; padding: 8px 14px; font-size: 12px; }
 }
 
 input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus {
@@ -599,6 +688,19 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
     -webkit-box-shadow: 0 0 0px 1000px transparent inset;
     transition: background-color 5000s ease-in-out 0s;
 }
+
+/* ===== 移动端快捷网址按钮（桌面隐藏）===== */
+.mobile-links-btn {
+    position: fixed; top: 20px; right: 112px; z-index: 20;
+    width: 38px; height: 38px; border-radius: 50%;
+    background: var(--bg-secondary); backdrop-filter: var(--bg-blur);
+    -webkit-backdrop-filter: var(--bg-blur);
+    border: 1px solid var(--border-color); color: var(--text-tertiary);
+    cursor: pointer; display: none; align-items: center; justify-content: center;
+    transition: var(--transition-fast);
+}
+.mobile-links-btn:hover { background: var(--bg-card-hover); color: var(--text-primary); transform: scale(1.05); }
+.mobile-links-btn svg { width: 18px; height: 18px; }
 
 /* ===== 登录按钮 ===== */
 .auth-btn {
