@@ -84,7 +84,7 @@
       favorites: stateData.favorites || [],
       history: stateData.history || [],
       current_engine: stateData.currentEngine || 0,
-      wallpaper: stateData.wallpaper || null,
+      notes: stateData.notes || [],
       updated_at: new Date().toISOString()
     };
     const { data: existing } = await client.from('user_data').select('id').eq('user_id', session.user.id).maybeSingle();
@@ -102,7 +102,7 @@
     const { data, error } = await client.from('user_data').select('*').eq('user_id', session.user.id).maybeSingle();
     if (error) throw error;
     if (!data) return null;
-    return { categories: data.categories || [], favorites: data.favorites || [], history: data.history || [], currentEngine: data.current_engine || 0, wallpaper: data.wallpaper || null, updatedAt: data.updated_at };
+    return { categories: data.categories || [], favorites: data.favorites || [], history: data.history || [], currentEngine: data.current_engine || 0, notes: data.notes || [], updatedAt: data.updated_at };
   }
 
   function onAuthStateChange(callback) {

@@ -53,11 +53,22 @@
 
     <!-- 次级页面 -->
     <div class="links-view" id="linksView">
+        <button class="links-back-btn" id="linksBackBtn" title="返回主界面">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
         <div class="links-header">
             <h2>快捷网址</h2>
-            <button class="add-cat-btn" id="addCategoryBtn">+ 新建分类</button>
+            <div class="links-header-btns">
+                <button class="add-cat-btn" id="addCategoryBtn">+ 新建分类</button>
+                <button class="add-cat-btn import-export-btn" id="importBtn" title="导入书签">📥 导入</button>
+                <button class="add-cat-btn import-export-btn" id="exportBtn" title="导出书签">📤 导出</button>
+            </div>
         </div>
-        <div class="links-container" id="linksContainer"></div>
+        <input type="file" id="importFileInput" accept=".html,.htm" hidden>
+        <!-- 分页容器：全部页（分类文件夹网格）+ 每分类一页 -->
+        <div class="pager-wrap" id="pagerWrap"></div>
+        <!-- 页面指示点 -->
+        <div class="page-dots" id="pageDots"></div>
         <div class="links-footer-hint links-view-bg"></div>
     </div>
 
@@ -79,6 +90,10 @@
                     <div class="form-group">
                         <label>网址 (URL)</label>
                         <input type="text" class="form-input" id="linkUrl" placeholder="例如：https://github.com">
+                    </div>
+                    <div class="form-group" id="linkCatGroup">
+                        <label>选择分类</label>
+                        <select class="form-input" id="linkCatSelect"></select>
                     </div>
                 </div>
                 <div id="catForm" style="display:none;">
@@ -108,37 +123,132 @@
         <div class="context-items" id="contextItems"></div>
     </div>
 
-    <!-- 背景设置按钮 -->
-    <button class="bg-settings-btn" id="bgSettingsBtn" title="更换背景">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2" y="2" width="20" height="20" rx="5"/>
-            <circle cx="12" cy="12" r="4"/>
-            <path d="M2 12h4m12 0h4M12 2v4m0 12v4"/>
-            <circle cx="6" cy="6" r="1" fill="currentColor"/>
-            <circle cx="18" cy="18" r="1" fill="currentColor"/>
-            <circle cx="18" cy="6" r="1" fill="currentColor"/>
-            <circle cx="6" cy="18" r="1" fill="currentColor"/>
+    <!-- 便签按钮 -->
+    <button class="note-btn" id="noteBtn" title="便签">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
         </svg>
     </button>
 
-    <!-- 背景选择面板 -->
+    <!-- 钉固便签展示区（主界面左上角） -->
+    <div class="pinned-notes" id="pinnedNotes"></div>
+    <!-- 钉固便签展开把手（移动端滑动隐藏后出现） -->
+    <button class="pinned-expand-handle" id="pinnedExpandHandle" title="展开">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+
+    <!-- 便签管理面板遮罩 -->
+    <div class="note-panel-overlay" id="notePanelOverlay"></div>
+    <!-- 便签管理面板 -->
+    <div class="note-panel" id="notePanel">
+        <div class="note-panel-header">
+            <span>📝 我的便签</span>
+            <button class="note-panel-close" id="notePanelClose">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+        </div>
+        <div class="note-panel-body">
+            <div class="note-panel-layout">
+                <!-- 左侧目录栏 -->
+                <div class="note-sidebar">
+                    <button class="note-new-btn" id="noteNewBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        <span>新建</span>
+                    </button>
+                    <div class="note-list" id="noteList"></div>
+                    <div class="note-sync-status" id="noteSyncStatus">○ 未同步</div>
+                </div>
+                <!-- 右侧编辑区 -->
+                <div class="note-main">
+                    <div class="note-editor">
+                        <input type="text" class="note-title-input" id="noteTitleInput" placeholder="便签标题..." maxlength="30">
+                        <textarea class="note-content-input" id="noteContentInput" placeholder="写点什么..." maxlength="500"></textarea>
+                        <div class="note-editor-actions">
+                            <button class="note-action-btn" id="notePinBtn" title="钉固到主屏幕">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16h14v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1h1V4H7v2h1a1 1 0 0 1 1 1z"/></svg>
+                                <span>钉固</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设置按钮 -->
+    <button class="bg-settings-btn" id="bgSettingsBtn" title="设置">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+    </button>
+
+    <!-- 设置面板 -->
     <div class="bg-panel" id="bgPanel">
         <div class="bg-panel-header">
-            <span>更换背景</span>
+            <span>设置</span>
             <button class="bg-panel-close" id="bgPanelClose">
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
             </button>
         </div>
-        <div class="bg-panel-grid" id="bgPanelGrid">
-            <!-- 由 JS 动态生成 -->
-        </div>
-        <div class="bg-panel-footer">
-            <label class="bg-upload-btn">
-                <span>+ 自定义图片</span>
-                <input type="file" id="bgFileInput" accept="image/*" hidden>
-            </label>
+        <div style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:0;">
+            <!-- 壁纸选择区 -->
+            <div class="settings-section">
+                <div class="settings-section-title">🎨 壁纸</div>
+                <div class="bg-panel-grid" id="bgPanelGrid">
+                    <!-- 由 JS 动态生成 -->
+                </div>
+                <div style="margin-top:8px;">
+                    <label class="bg-upload-btn">
+                        <span>+ 自定义图片</span>
+                        <input type="file" id="bgFileInput" accept="image/*" hidden>
+                    </label>
+                </div>
+            </div>
+            <!-- 效果设置区 -->
+            <div class="settings-section">
+                <div class="settings-section-title">✨ 效果</div>
+                <div class="setting-row">
+                    <div class="setting-icon">🫧</div>
+                    <div class="setting-info">
+                        <div class="setting-label">毛玻璃效果</div>
+                        <div class="setting-desc">搜索框与常用栏的模糊半透明背景</div>
+                    </div>
+                    <label class="toggle-switch" id="glassToggle">
+                        <input type="checkbox" checked>
+                        <span class="toggle-track"></span>
+                        <span class="toggle-thumb"></span>
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <div class="setting-icon">✨</div>
+                    <div class="setting-info">
+                        <div class="setting-label">气泡特效</div>
+                        <div class="setting-desc">鼠标经过时的浮游粒子动画</div>
+                    </div>
+                    <label class="toggle-switch" id="particlesToggle">
+                        <input type="checkbox" checked>
+                        <span class="toggle-track"></span>
+                        <span class="toggle-thumb"></span>
+                    </label>
+                </div>
+            </div>
         </div>
     </div>
+
+    <!-- 移动端：快捷网址入口 -->
+    <button class="mobile-links-btn" id="mobileLinksBtn" title="快捷网址">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1"/>
+            <rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/>
+            <rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+    </button>
 
     <!-- 用户认证按钮 -->
     <button class="auth-btn" id="authBtn" title="登录">
@@ -221,6 +331,9 @@
 
     <!-- 同步状态提示 -->
     <div class="sync-toast" id="syncToast"></div>
+
+    <!-- 网址卡片提示浮层（悬停显示完整标题） -->
+    <div class="link-tooltip" id="linkTooltip"></div>
 
     <!-- 光标画布 -->
     <canvas id="cursorCanvas"></canvas>
