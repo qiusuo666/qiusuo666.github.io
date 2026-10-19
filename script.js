@@ -430,10 +430,14 @@ function getColorForName(name) { let hash = 0; for (let i = 0; i < name.length; 
 // 网址图标（favicon 多源加载 + 域名文字回退）
 // ============================================
 // 图标源持久化到 localStorage：关标签页/重开浏览器后不再从零探测
-const ICON_STORE_KEY = 'cst_icon_src';
+// v2：加入 Yandex 兜底源后旧记录作废，重新探测一轮
+const ICON_STORE_KEY = 'cst_icon_src_v2';
+try { localStorage.removeItem('cst_icon_src'); } catch (e) {}
 const ICON_OK_TTL   = 30 * 24 * 3600 * 1000; // 成功记录 30 天（站点换图标后能自然刷新）
 const ICON_FAIL_TTL = 1  * 24 * 3600 * 1000; // 失败记录 1 天（避免一次网络抖动就永久缺图标）
-const ICON_TIMEOUT  = 3500;                  // 单源超时，防挂死
+const ICON_TIMEOUT  = 3500;                  // 站点直抓单源超时
+const ICON_CDN_TIMEOUT = 9000;               // Yandex 兜底：含 TLS 握手，且可能排在连接池队列里
+const ICON_CONCURRENCY = 6;                  // 同时探测的域名数，避免 60+ 请求同时排队导致误超时
 
 let iconStore = {};
 try { iconStore = JSON.parse(localStorage.getItem(ICON_STORE_KEY) || '{}') || {}; } catch (e) { iconStore = {}; }
@@ -475,17 +479,64 @@ function applyFavicon(iconEl, gradient, src) {
     applyIconBg(iconEl, gradient, src);
 }
 
-// 只用站点直抓：第三方镜像实测全部不可靠
-// （DDG/Google 图标源 10s 超时、favicon.im 403、api.iowen 连接失败）
+// 源顺序：站点直抓（快、原图）→ apple-touch-icon（高清）→ Yandex（全覆盖兜底）
+// 第三方实测：DDG/Google 国内必超时、favicon.im 403、国内免费 API 全部不可用；
+// Yandex 覆盖 67/67 域名，带 CORS + 12 小时缓存
 function faviconSources(domain) {
     return [
         `https://${domain}/favicon.ico`,
-        `https://${domain}/apple-touch-icon.png`
+        `https://${domain}/apple-touch-icon.png`,
+        `https://favicon.yandex.net/favicon/${domain}?size=120`
     ];
 }
 
-// 并发去重：同一域名只发一轮探测，结果分发给所有订阅者
+// 并发去重 + 限流：同一域名只发一轮探测，整体最多 ICON_CONCURRENCY 个域名同时探测
 const faviconPending = {};
+let iconActive = 0;
+const iconQueue = [];
+function iconSchedule(task) {
+    if (iconActive < ICON_CONCURRENCY) {
+        iconActive++;
+        task().finally(() => {
+            iconActive--;
+            const next = iconQueue.shift();
+            if (next) iconSchedule(next);
+        });
+    } else {
+        iconQueue.push(task);
+    }
+}
+
+function probeSources(domain, sources) {
+    return new Promise((resolve) => {
+        let idx = 0;
+        const tryLoad = () => {
+            if (idx >= sources.length) { resolve(null); return; }
+            const url = sources[idx];
+            const isCdn = url.indexOf('favicon.yandex.net') >= 0;
+            const img = new Image();
+            let done = false;
+            const timer = setTimeout(() => {
+                if (done) return;
+                done = true; img.onload = img.onerror = null;
+                idx++; tryLoad();
+            }, isCdn ? ICON_CDN_TIMEOUT : ICON_TIMEOUT);
+            img.onload = () => {
+                if (done) return;
+                done = true; clearTimeout(timer);
+                resolve(url);
+            };
+            img.onerror = () => {
+                if (done) return;
+                done = true; clearTimeout(timer);
+                idx++; tryLoad();
+            };
+            img.src = url;
+        };
+        tryLoad();
+    });
+}
+
 function fetchFavicon(domain, onSuccess, onFail) {
     const rec = iconRecord(domain);
     if (rec && rec.src) { onSuccess(rec.src); return; }
@@ -493,38 +544,14 @@ function fetchFavicon(domain, onSuccess, onFail) {
     if (faviconPending[domain]) { faviconPending[domain].push({ onSuccess, onFail }); return; }
     faviconPending[domain] = [{ onSuccess, onFail }];
 
-    const sources = faviconSources(domain);
-    let idx = 0;
-    const settle = (src) => {
+    iconSchedule(async () => {
+        const src = await probeSources(domain, faviconSources(domain));
         const waiters = faviconPending[domain] || [];
         delete faviconPending[domain];
         iconStore[domain] = src ? { src, ts: Date.now() } : { fail: 1, ts: Date.now() };
         saveIconStore();
         waiters.forEach(w => src ? w.onSuccess(src) : (w.onFail && w.onFail()));
-    };
-    const tryLoad = () => {
-        if (idx >= sources.length) { settle(null); return; }
-        const url = sources[idx];
-        const img = new Image();
-        let done = false;
-        const timer = setTimeout(() => {
-            if (done) return;
-            done = true; img.onload = img.onerror = null;
-            idx++; tryLoad();
-        }, ICON_TIMEOUT);
-        img.onload = () => {
-            if (done) return;
-            done = true; clearTimeout(timer);
-            settle(url);
-        };
-        img.onerror = () => {
-            if (done) return;
-            done = true; clearTimeout(timer);
-            idx++; tryLoad();
-        };
-        img.src = url;
-    };
-    tryLoad();
+    });
 }
 
 // 已知源：立刻铺背景（浏览器同帧从缓存解码），文字保留到解码成功那一刻，避免闪跳
