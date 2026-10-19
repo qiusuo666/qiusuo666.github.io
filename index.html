@@ -14,6 +14,8 @@
     <!-- 壁纸层 -->
     <div class="wallpaper" id="wallpaper">
         <div class="wallpaper-img" id="wallpaperImg"></div>
+        <!-- 预模糊层：进入次级页时只过渡它的 opacity，避免对 4K 原图逐帧做滤镜 -->
+        <div class="wallpaper-blur" id="wallpaperBlur"></div>
         <div class="overlay"></div>
     </div>
 
@@ -136,14 +138,10 @@
     <!-- 钉固便签展示区（主界面左上角） -->
     <div class="pinned-area" id="pinnedArea">
         <div class="pinned-notes" id="pinnedNotes"></div>
-        <button class="pinned-collapse-btn" id="pinnedCollapseBtn" title="收起便签栏" aria-label="收起便签栏">
+        <button class="pinned-collapse-btn" id="pinnedCollapseBtn" title="收起/展开便签栏" aria-label="收起或展开便签栏">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
     </div>
-    <!-- 钉固便签展开把手（收起后出现） -->
-    <button class="pinned-expand-handle" id="pinnedExpandHandle" title="展开便签栏" aria-label="展开便签栏">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-    </button>
 
     <!-- 便签管理面板遮罩 -->
     <div class="note-panel-overlay" id="notePanelOverlay"></div>

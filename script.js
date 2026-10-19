@@ -383,20 +383,28 @@ function closeSuggestions() { suggestions.classList.remove('active'); suggestion
 // ============================================
 // 视图
 // ============================================
+// 转场期间临时降级毛玻璃，结束后自动恢复（避免壁纸层变化时逐帧重算）
+let viewTransitionTimer = null;
+function markViewTransition() {
+    document.body.classList.add('is-transitioning');
+    clearTimeout(viewTransitionTimer);
+    viewTransitionTimer = setTimeout(() => document.body.classList.remove('is-transitioning'), 420);
+}
+
 function showMainView() {
     mainView.classList.remove('hidden');
     linksView.classList.remove('active');
     closeContextMenu();
-    wallpaperImg.classList.remove('blurred');
     document.querySelector('.wallpaper').classList.remove('overlay-strong');
+    markViewTransition();
 }
 
 function showLinksView() {
     mainView.classList.add('hidden');
     linksView.classList.add('active');
     closeContextMenu();
-    wallpaperImg.classList.add('blurred');
     document.querySelector('.wallpaper').classList.add('overlay-strong');
+    markViewTransition();
 }
 
 document.addEventListener('contextmenu', (e) => {
@@ -973,6 +981,14 @@ let customBgFiles = [];
 const DEFAULT_BG = PRESET_BG[0].file;
 const BING_MARKER = 'bing://daily';
 const wallpaperImg = $('wallpaperImg');
+const wallpaperBlur = $('wallpaperBlur');
+
+// 原图与预模糊层共用同一张图，切换壁纸只需赋值一次
+function applyWallpaperSource(src) {
+    const v = `url(${src})`;
+    wallpaperImg.style.backgroundImage = v;
+    if (wallpaperBlur) wallpaperBlur.style.backgroundImage = v;
+}
 const bgPanel = $('bgPanel');
 const bgPanelGrid = $('bgPanelGrid');
 const bgSettingsBtn = $('bgSettingsBtn');
@@ -1024,21 +1040,19 @@ function loadWallpaper() {
     if (bg === BING_MARKER) {
         // 先显示缓存或默认壁纸
         const cached = JSON.parse(localStorage.getItem('cst_bing') || '{}');
-        wallpaperImg.style.backgroundImage = cached.url
-            ? `url(${cached.url})`
-            : `url(photos/${DEFAULT_BG})`;
+        applyWallpaperSource(cached.url || `photos/${DEFAULT_BG}`);
         // 异步更新最新的 Bing 壁纸
         fetchBingWallpaper().then(result => {
-            if (result) wallpaperImg.style.backgroundImage = `url(${result.url})`;
+            if (result) applyWallpaperSource(result.url);
         });
     } else {
-        wallpaperImg.style.backgroundImage = bg.startsWith('data:') ? `url(${bg})` : `url(photos/${bg})`;
+        applyWallpaperSource(bg.startsWith('data:') ? bg : `photos/${bg}`);
     }
     setTimeout(() => wallpaperImg.classList.add('show'), 100);
 }
 
 function setWallpaper(src) {
-    wallpaperImg.style.backgroundImage = `url(${src})`;
+    applyWallpaperSource(src);
     localStorage.setItem('cst_wallpaper', src.startsWith('data:') ? src : src.replace('photos/', ''));
 }
 
@@ -2041,10 +2055,10 @@ function isPinnedCollapsed() {
 
 function setPinnedCollapsed(collapsed) {
     const area = $('pinnedArea');
-    const handle = $('pinnedExpandHandle');
-    if (!area || !handle) return;
+    if (!area) return;
     area.classList.toggle('collapsed', collapsed);
-    handle.style.display = collapsed ? 'flex' : 'none';
+    const btn = $('pinnedCollapseBtn');
+    if (btn) btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     try { localStorage.setItem(PINNED_COLLAPSE_KEY, collapsed ? '1' : '0'); } catch (e) {}
 }
 
@@ -2103,10 +2117,9 @@ function renderPinnedNotes() {
         if (dx < -40) setPinnedCollapsed(true);
         else if (dx > 40) setPinnedCollapsed(false);
     });
-    $('pinnedExpandHandle').addEventListener('click', () => setPinnedCollapsed(false));
     $('pinnedCollapseBtn').addEventListener('click', (e) => {
         e.stopPropagation();
-        setPinnedCollapsed(true);
+        setPinnedCollapsed(!$('pinnedArea').classList.contains('collapsed'));
     });
 })();
 

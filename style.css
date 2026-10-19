@@ -55,23 +55,31 @@ body {
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
-    transition: filter 0.6s cubic-bezier(0.4, 0, 0.2, 1),
-                transform 0.6s cubic-bezier(0.4, 0, 0.2, 1),
-                opacity 0.6s ease;
+    transition: opacity 0.6s ease;
     opacity: 0;
-    filter: none;
-    transform: scale(1) translateZ(0);
+    transform: translateZ(0);
     /* translateZ(0) 强制创建 GPU 合成层，修复 Chromium 内核下
        backdrop-filter 毛玻璃采样不到背景像素而失效的问题 */
 }
 
 .wallpaper-img.show { opacity: 1; }
 
-/* 次级界面时壁纸：饱和度降低、明度降低、略微放大、高斯模糊 */
-.wallpaper-img.blurred {
-    filter: brightness(0.55) saturate(0.35) blur(6px);
-    transform: scale(1.06);
+/* 预模糊层：滤镜在这里是静态的（只光栅化一次）。
+   进入次级页只过渡 opacity，全程 GPU 合成，
+   不再逐帧对 4K 原图重算 blur/brightness/saturate */
+.wallpaper-blur {
+    position: absolute;
+    inset: -24px;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    filter: blur(22px) brightness(0.55) saturate(0.35);
+    transform: scale(1.04);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s cubic-bezier(0.32, 0.72, 0, 1);
 }
+.wallpaper.overlay-strong .wallpaper-blur { opacity: 1; }
 
 .wallpaper .overlay {
     position: absolute;
@@ -94,14 +102,15 @@ body {
     align-items: center;
     justify-content: center;
     z-index: 1;
-    transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    /* 只用 opacity + translateY：纯合成属性，不触发重新光栅化 */
+    transition: opacity 0.38s cubic-bezier(0.32, 0.72, 0, 1), transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .links-view {
     z-index: 2;
     opacity: 0;
     pointer-events: none;
-    transform: scale(0.95);
+    transform: translateY(14px);
     padding: 60px 20px 20px;
     justify-content: flex-start;
 }
@@ -109,12 +118,12 @@ body {
 .links-view.active {
     opacity: 1;
     pointer-events: all;
-    transform: scale(1);
+    transform: translateY(0);
 }
 
 .main-view.hidden {
     opacity: 0;
-    transform: scale(1.05);
+    transform: translateY(-10px);
     pointer-events: none;
 }
 
@@ -472,7 +481,8 @@ body {
 .link-card {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 6px; padding: 12px 8px 10px; background: var(--bg-card);
-    backdrop-filter: var(--bg-blur); -webkit-backdrop-filter: var(--bg-blur);
+    /* 不用 backdrop-filter：二级页壁纸已是预模糊层，再模糊一次视觉收益≈0，
+       但 64 张卡 = 64 个实时模糊层，是转场卡顿的主因之一 */
     border: 1px solid var(--border-color); border-radius: var(--radius-md); cursor: grab;
     transition: var(--transition); text-decoration: none; color: var(--text-primary);
     position: relative; z-index: 1; aspect-ratio: 1; min-height: 90px;
@@ -1170,35 +1180,47 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
 /* ===== 钉固便签展示区 ===== */
 .pinned-area {
     position: fixed; top: 66px; left: 20px; z-index: 15;
-    display: flex; align-items: flex-start; gap: 4px;
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+    display: flex; align-items: flex-start; gap: 8px;
 }
-.pinned-area.collapsed { transform: translateX(-130%); opacity: 0; pointer-events: none; }
 
 .pinned-notes {
     display: flex; flex-direction: column; gap: 8px;
     max-width: 280px; max-height: calc(100vh - 100px);
-    overflow-y: auto; pointer-events: auto;
+    overflow-x: hidden; overflow-y: auto; pointer-events: auto;
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+    transition: max-width 0.36s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.24s ease;
 }
 
-/* 收起按钮：细竖条把手（桌面端；移动端用左滑手势） */
+/* 收起：笔记宽度收为 0，胶囊手柄在同一位置向左收拢——控件不换、位置连续 */
+.pinned-area.collapsed .pinned-notes {
+    min-width: 0; max-width: 0; opacity: 0; overflow: hidden; pointer-events: none;
+}
+
+/* 胶囊手柄：展开和收起都由它完成，箭头旋转 180° 表示方向 */
 .pinned-collapse-btn {
     position: relative;
-    flex: 0 0 auto; width: 13px; height: 64px; margin-top: 8px;
-    border-radius: 7px; border: 1px solid rgba(255, 255, 255, 0.18);
-    background: rgba(18, 22, 32, 0.55);
-    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    color: rgba(255, 255, 255, 0.78);
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+    flex: 0 0 auto; width: 13px; height: 78px; margin-top: 2px;
+    border-radius: 999px;
+    border: 0.5px solid rgba(255, 255, 255, 0.38);
+    background: rgba(18, 20, 30, 0.22);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    color: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
 }
-/* 视觉 13px，实际点击区放大到 ~27×80，便于操作 */
-.pinned-collapse-btn::after { content: ''; position: absolute; inset: -8px -7px; }
-.pinned-collapse-btn:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
-.pinned-collapse-btn:active { transform: scaleX(0.88); }
-.pinned-collapse-btn svg { width: 9px; height: 9px; }
+/* 视觉 13px，点击区外扩到约 29×94 */
+.pinned-collapse-btn::after { content: ''; position: absolute; inset: -8px -8px; }
+.pinned-collapse-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 3px 14px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.pinned-collapse-btn:active { transform: scale(0.94); }
+.pinned-collapse-btn svg { width: 9px; height: 9px; transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1); }
+.pinned-area.collapsed .pinned-collapse-btn svg { transform: rotate(180deg); }
 .pinned-notes::-webkit-scrollbar { width: 3px; }
 .pinned-notes::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
 
@@ -1238,18 +1260,7 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
 .pinned-note-delete:hover { color: #ff6b6b; background: rgba(255, 107, 107, 0.15); }
 .pinned-note-delete svg { width: 10px; height: 10px; }
 
-/* 展开把手（移动端钉固区隐藏后出现） */
-.pinned-expand-handle {
-    position: fixed; top: 66px; left: 20px; z-index: 14;
-    width: 38px; height: 38px; border-radius: 50%;
-    background: var(--bg-secondary); backdrop-filter: var(--bg-blur);
-    -webkit-backdrop-filter: var(--bg-blur);
-    border: 1px solid var(--border-color); color: var(--text-tertiary);
-    cursor: pointer; display: none; align-items: center; justify-content: center;
-    transition: var(--transition-fast);
-}
-.pinned-expand-handle:hover { color: var(--text-primary); background: var(--bg-card-hover); }
-.pinned-expand-handle svg { width: 16px; height: 16px; }
+/* 展开把手已合并进 .pinned-collapse-btn，此处不再需要独立控件 */
 
 /* 响应式：移动端面板上移 */
 @media (max-width: 768px) {
@@ -1259,7 +1270,6 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
     .pinned-area { top: 56px; left: 14px; }
     .pinned-notes { max-width: 160px; max-height: calc(100vh - 120px); }
     .pinned-collapse-btn { display: none; }
-    .pinned-expand-handle { display: flex; }
     .note-panel { max-width: 94%; max-height: 85vh; }
     /* 平板端侧边栏略窄 */
     .note-sidebar { width: 30%; }
@@ -1272,8 +1282,6 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
     .note-panel-header { padding: 12px 16px; }
     .note-panel-body { padding: 12px 16px; overflow: auto; }
     .note-btn svg { width: 15px; height: 15px; }
-    .pinned-expand-handle { top: 48px; left: 10px; width: 30px; height: 30px; }
-    .pinned-expand-handle svg { width: 13px; height: 13px; }
     /* 手机端垂直布局 */
     .note-panel-layout { flex-direction: column; gap: 10px; }
     .note-sidebar { width: 100%; border-right: none; border-bottom: 1px solid rgba(255, 255, 255, 0.06); padding-right: 0; padding-bottom: 8px; max-height: 130px; flex-shrink: 0; }
@@ -1361,6 +1369,21 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
     transform: translateX(20px);
 }
 
+/* ===== 转场性能：过渡期间临时关闭毛玻璃，避免壁纸层变化时逐帧重算 ===== */
+body.is-transitioning .cat-tab,
+body.is-transitioning .folder-card,
+body.is-transitioning .add-card,
+body.is-transitioning .pager-panel .link-card {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* 隐藏页不渲染：只算当前可见页，进入二级页时少算 8 个面板 */
+.pager-panel {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 640px;
+}
+
 /* 毛玻璃关闭时 body 类 */
 body.no-glass .search-box,
 body.no-glass .favorites-track,
@@ -1372,7 +1395,8 @@ body.no-glass .engine-dropdown,
 body.no-glass .mobile-links-btn,
 body.no-glass .note-btn,
 body.no-glass .pinned-note-card,
-body.no-glass .pinned-expand-handle,
+body.no-glass .pinned-collapse-btn,
+body.no-glass .pinned-notes,
 body.no-glass .sync-toast,
 body.no-glass .note-panel,
 body.no-glass .user-dropdown,
