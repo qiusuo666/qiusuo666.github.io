@@ -1183,18 +1183,22 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
     scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
 }
 
-/* 收起按钮（桌面端；移动端用左滑手势） */
+/* 收起按钮：细竖条把手（桌面端；移动端用左滑手势） */
 .pinned-collapse-btn {
-    flex: 0 0 auto; width: 20px; height: 20px; margin-top: 2px;
-    display: flex; align-items: center; justify-content: center;
-    border-radius: 50%; border: 1px solid var(--border-color);
-    background: var(--bg-secondary); backdrop-filter: var(--bg-blur);
-    -webkit-backdrop-filter: var(--bg-blur);
-    color: var(--text-tertiary); cursor: pointer; opacity: 0.4;
-    transition: var(--transition-fast);
+    position: relative;
+    flex: 0 0 auto; width: 13px; height: 64px; margin-top: 8px;
+    border-radius: 7px; border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(18, 22, 32, 0.55);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    color: rgba(255, 255, 255, 0.78);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
-.pinned-collapse-btn:hover { opacity: 1; color: var(--text-primary); background: var(--bg-card-hover); }
-.pinned-collapse-btn svg { width: 11px; height: 11px; }
+/* 视觉 13px，实际点击区放大到 ~27×80，便于操作 */
+.pinned-collapse-btn::after { content: ''; position: absolute; inset: -8px -7px; }
+.pinned-collapse-btn:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pinned-collapse-btn:active { transform: scaleX(0.88); }
+.pinned-collapse-btn svg { width: 9px; height: 9px; }
 .pinned-notes::-webkit-scrollbar { width: 3px; }
 .pinned-notes::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
 

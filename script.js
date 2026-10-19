@@ -524,6 +524,9 @@ function probeSources(domain, sources) {
             img.onload = () => {
                 if (done) return;
                 done = true; clearTimeout(timer);
+                // Yandex 找不到图标时返回 1×1 全透明 PNG，必须当失败处理，
+                // 否则会判定"成功"、文字层被隐藏，卡片变成空白
+                if (img.naturalWidth <= 2 || img.naturalHeight <= 2) { idx++; tryLoad(); return; }
                 resolve(url);
             };
             img.onerror = () => {
@@ -559,7 +562,16 @@ function paintKnownIcon(el, gradient, src, domain, onStale) {
     applyIconBg(el, gradient, src);
     const img = new Image();
     let settled = false;
-    img.onload = () => { if (settled) return; settled = true; el.classList.add('has-favicon'); };
+    img.onload = () => {
+        if (settled) return;
+        settled = true;
+        if (img.naturalWidth <= 2 || img.naturalHeight <= 2) {
+            delete iconStore[domain]; saveIconStore();
+            onStale();
+            return;
+        }
+        el.classList.add('has-favicon');
+    };
     img.onerror = () => {
         if (settled) return;
         settled = true;
@@ -596,7 +608,15 @@ function loadFaviconThumb(el, url) {
         el.style.backgroundImage = `url("${rec.src}")`;
         const img = new Image();
         let settled = false;
-        img.onload = () => { settled = true; };
+        img.onload = () => {
+            if (settled) return;
+            settled = true;
+            if (img.naturalWidth <= 2 || img.naturalHeight <= 2) {
+                delete iconStore[domain]; saveIconStore();
+                el.style.backgroundImage = '';
+                fetchFavicon(domain, s => { el.style.backgroundImage = `url("${s}")`; });
+            }
+        };
         img.onerror = () => {
             if (settled) return; settled = true;
             delete iconStore[domain]; saveIconStore();
