@@ -429,8 +429,30 @@ function getColorForName(name) { let hash = 0; for (let i = 0; i < name.length; 
 // ============================================
 // 网址图标（favicon 多源加载 + 域名文字回退）
 // ============================================
-const faviconCache = {};
-const faviconFailCache = {};
+// 图标源持久化到 localStorage：关标签页/重开浏览器后不再从零探测
+const ICON_STORE_KEY = 'cst_icon_src';
+const ICON_OK_TTL   = 30 * 24 * 3600 * 1000; // 成功记录 30 天（站点换图标后能自然刷新）
+const ICON_FAIL_TTL = 1  * 24 * 3600 * 1000; // 失败记录 1 天（避免一次网络抖动就永久缺图标）
+const ICON_TIMEOUT  = 3500;                  // 单源超时，防挂死
+
+let iconStore = {};
+try { iconStore = JSON.parse(localStorage.getItem(ICON_STORE_KEY) || '{}') || {}; } catch (e) { iconStore = {}; }
+
+let iconSaveTimer = null;
+function saveIconStore() {
+    clearTimeout(iconSaveTimer);
+    iconSaveTimer = setTimeout(() => {
+        try { localStorage.setItem(ICON_STORE_KEY, JSON.stringify(iconStore)); } catch (e) {}
+    }, 400);
+}
+
+function iconRecord(domain) {
+    const rec = iconStore[domain];
+    if (!rec || !rec.ts) return null;
+    const ttl = rec.src ? ICON_OK_TTL : ICON_FAIL_TTL;
+    if (Date.now() - rec.ts > ttl) { delete iconStore[domain]; saveIconStore(); return null; }
+    return rec;
+}
 
 function getDomain(url) {
     try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return ''; }
@@ -441,67 +463,123 @@ function domainFallbackText(domain) {
     return domain.slice(0, 12);
 }
 
-function applyFavicon(iconEl, gradient, src) {
-    iconEl.classList.add('has-favicon');
-    iconEl.style.backgroundImage = `url("${src}"), ${gradient}`;
-    iconEl.style.backgroundSize = '60% 60%, cover';
-    iconEl.style.backgroundPosition = 'center';
-    iconEl.style.backgroundRepeat = 'no-repeat';
+function applyIconBg(el, gradient, src) {
+    el.style.backgroundImage = `url("${src}"), ${gradient}`;
+    el.style.backgroundSize = '60% 60%, cover';
+    el.style.backgroundPosition = 'center';
+    el.style.backgroundRepeat = 'no-repeat';
 }
 
-// 三源 fallback：站点直抓（国内最稳）→ DuckDuckGo → Google
+function applyFavicon(iconEl, gradient, src) {
+    iconEl.classList.add('has-favicon');
+    applyIconBg(iconEl, gradient, src);
+}
+
+// 只用站点直抓：第三方镜像实测全部不可靠
+// （DDG/Google 图标源 10s 超时、favicon.im 403、api.iowen 连接失败）
 function faviconSources(domain) {
     return [
         `https://${domain}/favicon.ico`,
-        `https://icons.duckduckgo.com/ip3/${domain}.ico`,
-        `https://www.google.com/s2/favicons?sz=64&domain=${domain}`
+        `https://${domain}/apple-touch-icon.png`
     ];
 }
 
-// 并发去重加载：同一域名只发一轮请求，成功后回调全部订阅者
+// 并发去重：同一域名只发一轮探测，结果分发给所有订阅者
 const faviconPending = {};
-function fetchFavicon(domain, onSuccess) {
-    if (faviconCache[domain]) { onSuccess(faviconCache[domain]); return; }
-    if (faviconFailCache[domain]) return;
-    if (faviconPending[domain]) { faviconPending[domain].push(onSuccess); return; }
-    faviconPending[domain] = [onSuccess];
+function fetchFavicon(domain, onSuccess, onFail) {
+    const rec = iconRecord(domain);
+    if (rec && rec.src) { onSuccess(rec.src); return; }
+    if (rec && rec.fail) { if (onFail) onFail(); return; }
+    if (faviconPending[domain]) { faviconPending[domain].push({ onSuccess, onFail }); return; }
+    faviconPending[domain] = [{ onSuccess, onFail }];
+
     const sources = faviconSources(domain);
     let idx = 0;
+    const settle = (src) => {
+        const waiters = faviconPending[domain] || [];
+        delete faviconPending[domain];
+        iconStore[domain] = src ? { src, ts: Date.now() } : { fail: 1, ts: Date.now() };
+        saveIconStore();
+        waiters.forEach(w => src ? w.onSuccess(src) : (w.onFail && w.onFail()));
+    };
     const tryLoad = () => {
-        if (idx >= sources.length) {
-            faviconFailCache[domain] = true;
-            faviconPending[domain] = null;
-            return;
-        }
+        if (idx >= sources.length) { settle(null); return; }
+        const url = sources[idx];
         const img = new Image();
+        let done = false;
+        const timer = setTimeout(() => {
+            if (done) return;
+            done = true; img.onload = img.onerror = null;
+            idx++; tryLoad();
+        }, ICON_TIMEOUT);
         img.onload = () => {
-            faviconCache[domain] = sources[idx];
-            const cbs = faviconPending[domain] || [];
-            faviconPending[domain] = null;
-            cbs.forEach(cb => cb(sources[idx]));
+            if (done) return;
+            done = true; clearTimeout(timer);
+            settle(url);
         };
-        img.onerror = () => { idx++; tryLoad(); };
-        img.src = sources[idx];
+        img.onerror = () => {
+            if (done) return;
+            done = true; clearTimeout(timer);
+            idx++; tryLoad();
+        };
+        img.src = url;
     };
     tryLoad();
+}
+
+// 已知源：立刻铺背景（浏览器同帧从缓存解码），文字保留到解码成功那一刻，避免闪跳
+function paintKnownIcon(el, gradient, src, domain, onStale) {
+    applyIconBg(el, gradient, src);
+    const img = new Image();
+    let settled = false;
+    img.onload = () => { if (settled) return; settled = true; el.classList.add('has-favicon'); };
+    img.onerror = () => {
+        if (settled) return;
+        settled = true;
+        delete iconStore[domain]; saveIconStore();
+        onStale();
+    };
+    img.src = src;
 }
 
 function loadFavicon(iconEl, name, url) {
     const domain = getDomain(url);
     if (!domain) return;
     const gradient = getColorForName(name);
-    if (faviconFailCache[domain]) return;
-    if (faviconCache[domain]) { applyFavicon(iconEl, gradient, faviconCache[domain]); return; }
-    fetchFavicon(domain, (src) => applyFavicon(iconEl, gradient, src));
+    const rec = iconRecord(domain);
+    if (rec && rec.fail) return;              // 已知失败：直接用域名文字，不再空转
+    if (rec && rec.src) {
+        paintKnownIcon(iconEl, gradient, rec.src, domain, () => {
+            iconEl.style.backgroundImage = '';
+            iconEl.classList.remove('has-favicon');
+            fetchFavicon(domain, s => applyFavicon(iconEl, gradient, s));
+        });
+        return;
+    }
+    fetchFavicon(domain, s => applyFavicon(iconEl, gradient, s));
 }
 
 // 无渐变的小图标（分类文件夹缩略图等）
 function loadFaviconThumb(el, url) {
     const domain = getDomain(url);
     if (!domain) return;
-    if (faviconFailCache[domain]) return;
-    if (faviconCache[domain]) { el.style.backgroundImage = `url("${faviconCache[domain]}")`; return; }
-    fetchFavicon(domain, (src) => { el.style.backgroundImage = `url("${src}")`; });
+    const rec = iconRecord(domain);
+    if (rec && rec.fail) return;
+    if (rec && rec.src) {
+        el.style.backgroundImage = `url("${rec.src}")`;
+        const img = new Image();
+        let settled = false;
+        img.onload = () => { settled = true; };
+        img.onerror = () => {
+            if (settled) return; settled = true;
+            delete iconStore[domain]; saveIconStore();
+            el.style.backgroundImage = '';
+            fetchFavicon(domain, s => { el.style.backgroundImage = `url("${s}")`; });
+        };
+        img.src = rec.src;
+        return;
+    }
+    fetchFavicon(domain, s => { el.style.backgroundImage = `url("${s}")`; });
 }
 
 // ============================================
@@ -1904,14 +1982,44 @@ function refreshNoteList() {
     });
 }
 
+// ============================================
+// 便签栏收起/展开（桌面端按钮 + 移动端左滑）
+// ============================================
+const PINNED_COLLAPSE_KEY = 'cst_pinned_collapsed';
+let pinnedStateRestored = false;
+
+function isPinnedCollapsed() {
+    try { return localStorage.getItem(PINNED_COLLAPSE_KEY) === '1'; } catch (e) { return false; }
+}
+
+function setPinnedCollapsed(collapsed) {
+    const area = $('pinnedArea');
+    const handle = $('pinnedExpandHandle');
+    if (!area || !handle) return;
+    area.classList.toggle('collapsed', collapsed);
+    handle.style.display = collapsed ? 'flex' : 'none';
+    try { localStorage.setItem(PINNED_COLLAPSE_KEY, collapsed ? '1' : '0'); } catch (e) {}
+}
+
+// 只在首次渲染时恢复上次的收起状态，之后的手动操作不会被重新渲染覆盖
+function restorePinnedState() {
+    if (pinnedStateRestored) return;
+    pinnedStateRestored = true;
+    if (isPinnedCollapsed()) setPinnedCollapsed(true);
+}
+
 function renderPinnedNotes() {
     const container = $('pinnedNotes');
+    const collapseBtn = $('pinnedCollapseBtn');
     const pinned = STATE.notes.filter(n => n.pinned);
     if (pinned.length === 0) {
         container.innerHTML = '';
         $('noteBtn').classList.remove('has-notes');
+        if (collapseBtn) collapseBtn.style.display = 'none';
+        setPinnedCollapsed(false);
         return;
     }
+    if (collapseBtn) collapseBtn.style.display = '';
     $('noteBtn').classList.add('has-notes');
     container.innerHTML = pinned.map(n => {
         const title = n.title || '无标题';
@@ -1934,32 +2042,25 @@ function renderPinnedNotes() {
             deleteNote(btn.dataset.id);
         });
     });
+    restorePinnedState();
 }
 
-// 滑动隐藏/展开（移动端 ≤768px）
+// 移动端左滑收起 / 右滑展开（≤768px 才会触发）
 (function () {
     let startX = 0;
-    const toggler = (show) => {
-        const that = $('pinnedNotes');
-        const handle = $('pinnedExpandHandle');
-        if (show) {
-            that.style.transform = '';
-            that.style.opacity = '';
-            handle.style.display = 'none';
-        } else {
-            that.style.transform = 'translateX(-120%)';
-            that.style.opacity = '0';
-            handle.style.display = 'flex';
-        }
-    };
     $('pinnedNotes').addEventListener('touchstart', (e) => {
         startX = e.touches[0].clientX;
     }, { passive: true });
     $('pinnedNotes').addEventListener('touchend', (e) => {
         const dx = (e.changedTouches[0].clientX - startX);
-        if (dx < -40) toggler(false);
+        if (dx < -40) setPinnedCollapsed(true);
+        else if (dx > 40) setPinnedCollapsed(false);
     });
-    $('pinnedExpandHandle').addEventListener('click', () => toggler(true));
+    $('pinnedExpandHandle').addEventListener('click', () => setPinnedCollapsed(false));
+    $('pinnedCollapseBtn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        setPinnedCollapsed(true);
+    });
 })();
 
 $('noteBtn').addEventListener('click', () => openNotePanel());

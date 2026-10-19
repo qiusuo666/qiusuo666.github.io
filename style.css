@@ -1168,15 +1168,33 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
 .note-new-btn svg { width: 14px; height: 14px; }
 
 /* ===== 钉固便签展示区 ===== */
-.pinned-notes {
+.pinned-area {
     position: fixed; top: 66px; left: 20px; z-index: 15;
+    display: flex; align-items: flex-start; gap: 4px;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+}
+.pinned-area.collapsed { transform: translateX(-130%); opacity: 0; pointer-events: none; }
+
+.pinned-notes {
     display: flex; flex-direction: column; gap: 8px;
     max-width: 280px; max-height: calc(100vh - 100px);
     overflow-y: auto; pointer-events: auto;
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
 }
+
+/* 收起按钮（桌面端；移动端用左滑手势） */
+.pinned-collapse-btn {
+    flex: 0 0 auto; width: 20px; height: 20px; margin-top: 2px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; border: 1px solid var(--border-color);
+    background: var(--bg-secondary); backdrop-filter: var(--bg-blur);
+    -webkit-backdrop-filter: var(--bg-blur);
+    color: var(--text-tertiary); cursor: pointer; opacity: 0.4;
+    transition: var(--transition-fast);
+}
+.pinned-collapse-btn:hover { opacity: 1; color: var(--text-primary); background: var(--bg-card-hover); }
+.pinned-collapse-btn svg { width: 11px; height: 11px; }
 .pinned-notes::-webkit-scrollbar { width: 3px; }
 .pinned-notes::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
 
@@ -1234,7 +1252,9 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
     .note-panel { top: 8px; transform: translate(-50%, 0) scale(0.9); max-height: calc(100vh - 80px); }
     .note-panel.open { transform: translate(-50%, 0) scale(1); }
     .note-btn { top: 14px; left: 14px; width: 34px; height: 34px; }
-    .pinned-notes { top: 56px; left: 14px; max-width: 160px; max-height: calc(100vh - 120px); }
+    .pinned-area { top: 56px; left: 14px; }
+    .pinned-notes { max-width: 160px; max-height: calc(100vh - 120px); }
+    .pinned-collapse-btn { display: none; }
     .pinned-expand-handle { display: flex; }
     .note-panel { max-width: 94%; max-height: 85vh; }
     /* 平板端侧边栏略窄 */
@@ -1242,7 +1262,8 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
 }
 @media (max-width: 480px) {
     .note-btn { top: 10px; left: 10px; width: 30px; height: 30px; }
-    .pinned-notes { top: 48px; left: 10px; max-width: 140px; max-height: calc(100vh - 120px); }
+    .pinned-area { top: 48px; left: 10px; }
+    .pinned-notes { max-width: 140px; max-height: calc(100vh - 120px); }
     .note-panel { max-width: 96%; }
     .note-panel-header { padding: 12px 16px; }
     .note-panel-body { padding: 12px 16px; overflow: auto; }

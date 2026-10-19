@@ -5,11 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>新标签页</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Supabase SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="supabase-client.js"></script>
+    <!-- 本地依赖 + defer：不阻塞首屏解析，按声明顺序执行 -->
+    <script src="vendor/supabase.min.js" defer></script>
+    <script src="supabase-client.js" defer></script>
+    <script src="script.js" defer></script>
 </head>
 <body>
     <!-- 壁纸层 -->
@@ -135,9 +134,14 @@
     </button>
 
     <!-- 钉固便签展示区（主界面左上角） -->
-    <div class="pinned-notes" id="pinnedNotes"></div>
-    <!-- 钉固便签展开把手（移动端滑动隐藏后出现） -->
-    <button class="pinned-expand-handle" id="pinnedExpandHandle" title="展开">
+    <div class="pinned-area" id="pinnedArea">
+        <div class="pinned-notes" id="pinnedNotes"></div>
+        <button class="pinned-collapse-btn" id="pinnedCollapseBtn" title="收起便签栏" aria-label="收起便签栏">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+    </div>
+    <!-- 钉固便签展开把手（收起后出现） -->
+    <button class="pinned-expand-handle" id="pinnedExpandHandle" title="展开便签栏" aria-label="展开便签栏">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
     </button>
 
@@ -338,6 +342,13 @@
     <!-- 光标画布 -->
     <canvas id="cursorCanvas"></canvas>
 
-    <script src="script.js"></script>
+    <script>
+    // Service Worker：同源静态资源本地优先；HTML 走网络，保证改动即时生效
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
+        });
+    }
+    </script>
 </body>
 </html>
