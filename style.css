@@ -883,6 +883,13 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
 }
 .auth-btn:hover { background: var(--bg-card-hover); color: var(--text-primary); transform: scale(1.05); }
 .auth-btn.logged-in { background: var(--accent-gradient); color: white; border-color: transparent; }
+/* 登录已过期：红色告警态 + 右上角小圆点，别再让人以为还在同步 */
+.auth-btn.auth-expired { background: rgba(255, 107, 107, 0.16); color: #ff6b6b; border-color: rgba(255, 107, 107, 0.45); }
+.auth-btn.auth-expired::after {
+    content: ''; position: absolute; top: 1px; right: 1px;
+    width: 8px; height: 8px; border-radius: 50%; background: #ff6b6b;
+    box-shadow: 0 0 0 2px var(--bg-secondary);
+}
 .auth-btn svg { width: 18px; height: 18px; }
 
 /* ===== 用户下拉菜单 ===== */

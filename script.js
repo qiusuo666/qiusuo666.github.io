@@ -65,6 +65,9 @@ let currentUser = null;
 let syncDebounceTimer = null;
 let lastSyncTime = null;
 let isSyncing = false;
+let syncPending = false;    // 有改动还没推上云端
+let authExpired = false;    // 会话失效：曾经登录过，但这次启动拿不到用户
+let manualSignOut = false;  // 用户主动退出，避免误报"登录已过期"
 const SYNC_DEBOUNCE = 3000;
 
 const clockTime = $('clockTime');
@@ -128,10 +131,25 @@ function saveState() {
             notes: STATE.notes
         }));
     } catch (e) {}
-    if (isLoggedIn && !isSyncing) {
-        clearTimeout(syncDebounceTimer);
-        syncDebounceTimer = setTimeout(() => uploadToCloud(), SYNC_DEBOUNCE);
+    if (isLoggedIn) {
+        syncPending = true;
+        scheduleSync(SYNC_DEBOUNCE);
     }
+}
+
+// 统一调度上传。delay=0 → 立即上传（添加快捷网址、切后台等场景）
+function scheduleSync(delay) {
+    clearTimeout(syncDebounceTimer);
+    syncDebounceTimer = setTimeout(() => { syncDebounceTimer = null; flushSync(); }, delay);
+}
+
+// 把待上传的改动立刻推上去，不再等防抖
+function flushSync() {
+    clearTimeout(syncDebounceTimer);
+    syncDebounceTimer = null;
+    if (!syncPending || !isLoggedIn || isSyncing) return;
+    syncPending = false;
+    uploadToCloud();
 }
 
 function loadState() {
@@ -855,6 +873,7 @@ function handleDropOnCategory(targetCatId) {
 
 function removeLink(linkId, catId) { const cat = STATE.categories.find(c => c.id === catId); if (!cat) return; cat.links = cat.links.filter(l => l.id !== linkId); saveState(); renderLinks(); }
 function addOrEditLink(name, url) {
+    const isNewLink = !STATE.editLinkId;
     const targetCatId = STATE.editLinkId ? (linkCatSelect ? linkCatSelect.value : STATE.editCatId) : STATE.editCatId;
     const cat = STATE.categories.find(c => c.id === targetCatId);
     if (!cat) return;
@@ -875,6 +894,8 @@ function addOrEditLink(name, url) {
         cat.links.push({ id: generateId(), name, url });
     }
     saveState(); renderLinks(); closeModal();
+    // 新增网址后立即上传一次，不等 3 秒防抖（手机端切走也不会丢）
+    if (isNewLink) flushSync();
 }
 function openCatRenameModal(catId) { const cat = STATE.categories.find(c => c.id === catId); if (!cat) return; STATE.editCatId = catId; catNameInput.value = cat.name; modalTitle.textContent = '重命名分类'; modalConfirm.textContent = '保存'; linkForm.style.display = 'none'; catForm.style.display = 'block'; openModal(); }
 function saveCatName(name) { const cat = STATE.categories.find(c => c.id === STATE.editCatId); if (!cat) return; cat.name = name; saveState(); renderLinks(); closeModal(); }
@@ -1245,7 +1266,12 @@ async function uploadToCloud() {
     } catch (e) {
         userDropdownSync.textContent = '⚠ 同步失败';
         userDropdownSync.className = 'user-dropdown-sync error';
-    } finally { isSyncing = false; }
+        syncPending = true;   // 失败保留标记，下次操作或切后台时补传
+    } finally {
+        isSyncing = false;
+        // 上传过程中又有新改动 → 补一轮
+        if (syncPending && isLoggedIn) scheduleSync(300);
+    }
 }
 
 async function downloadFromCloud() {
@@ -1278,6 +1304,13 @@ function updateSyncStatus() {
         userDropdownSync.className = 'user-dropdown-sync';
     }
 }
+
+// 切后台 / 关闭页面时，把待上传的改动立刻推上去
+// （手机端 3 秒防抖经常被系统冻结，钉完便签直接切走就会丢）
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushSync();
+});
+window.addEventListener('pagehide', () => { flushSync(); });
 
 // ============================================
 // Toast
@@ -1434,6 +1467,8 @@ authSubmitBtn.addEventListener('click', async () => {
 function onLoginSuccess(user, { download = false } = {}) {
     isLoggedIn = true;
     currentUser = user;
+    manualSignOut = false;
+    if (authExpired) setAuthExpired(false);   // 重新登录成功，清掉过期告警
     authBtn.classList.add('logged-in');
     authBtn.title = window.CST.getDisplayName(user);
     userDropdownName.textContent = window.CST.getDisplayName(user);
@@ -1444,17 +1479,20 @@ function onLoginSuccess(user, { download = false } = {}) {
 $('btnSignOut').addEventListener('click', async () => {
     if (!confirm('确定退出登录？本地数据会保留。')) return;
     try {
+        manualSignOut = true;                 // 主动退出，不算"登录过期"
         await window.CST.signOut();
         isLoggedIn = false;
         currentUser = null;
         lastSyncTime = null;
+        syncPending = false;
         authBtn.classList.remove('logged-in');
         authBtn.title = '登录';
         userDropdown.classList.remove('open');
+        setAuthExpired(false);
         userDropdownSync.textContent = '○ 未同步';
         userDropdownSync.className = 'user-dropdown-sync';
         showSyncToast('已退出登录', '');
-    } catch (e) {}
+    } catch (e) { manualSignOut = false; }
 });
 
 $('btnSyncUpload').addEventListener('click', async () => {
@@ -1558,18 +1596,68 @@ function initSettingsToggles() {
     applyParticles(particlesEnabled);
 }
 
+// ---- 登录态失效检测 ----
+// 只在"浏览器里存着会话、但这次启动拿不到用户"时判定为过期，
+// 免得把"从没登录过"也报警。
+function hasStoredSession() {
+    try {
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.indexOf('sb-') === 0 && k.indexOf('-auth-token') > -1) return true;
+        }
+    } catch (e) {}
+    return false;
+}
+
+function setAuthExpired(on) {
+    authExpired = !!on;
+    if (on) {
+        authBtn.classList.add('auth-expired');
+        authBtn.title = '登录已过期，点击重新登录';
+        userDropdownSync.textContent = '⚠ 登录已过期';
+        userDropdownSync.className = 'user-dropdown-sync error';
+        showSyncToast('登录已过期，改动只存在本地，请点右上角头像重新登录', 'error');
+    } else {
+        authBtn.classList.remove('auth-expired');
+    }
+    updateNoteSyncStatus();
+}
+
 async function initAuth() {
     try {
         if (typeof window.CST === 'undefined') { setTimeout(initAuth, 500); return; }
-        const user = await window.CST.getCurrentUser();
-        if (user) { onLoginSuccess(user, { download: true }); console.log('🔑 已恢复登录状态:', window.CST.getDisplayName(user)); }
-    } catch (e) { console.log('🔑 未登录（离线或首次使用）'); }
+        // 先记下"有没有存过会话"，因为 getCurrentUser 失败时 SDK 会把它清掉
+        const hadSession = hasStoredSession();
+        try {
+            const user = await window.CST.getCurrentUser();
+            if (user) {
+                onLoginSuccess(user, { download: true });
+                console.log('🔑 已恢复登录状态:', window.CST.getDisplayName(user));
+            } else if (hadSession) {
+                setAuthExpired(true);
+                console.log('🔑 会话已过期，数据只存本地');
+            } else {
+                // 从没登录过：便签面板显示"未登录"，不该显示"未同步"
+                updateNoteSyncStatus();
+            }
+        } catch (e) {
+            if (hadSession) setAuthExpired(true); else updateNoteSyncStatus();
+            console.log('🔑 未登录（离线或首次使用）');
+        }
+    } catch (e) {}
     try {
         window.CST.onAuthStateChange((event, session) => {
             if (event === 'SIGNED_OUT') {
+                const wasLoggedIn = isLoggedIn;
                 isLoggedIn = false; currentUser = null; lastSyncTime = null;
                 authBtn.classList.remove('logged-in'); authBtn.title = '登录';
-                userDropdownSync.textContent = '○ 未同步'; userDropdownSync.className = 'user-dropdown-sync';
+                if (wasLoggedIn && !manualSignOut) {
+                    setAuthExpired(true);   // 被动掉线：给可见提示
+                } else {
+                    userDropdownSync.textContent = '○ 未同步';
+                    userDropdownSync.className = 'user-dropdown-sync';
+                    updateNoteSyncStatus();
+                }
             } else if (event === 'SIGNED_IN' && !isLoggedIn) {
                 if (session?.user) onLoginSuccess(session.user);
             }
@@ -1969,8 +2057,8 @@ $('notePinBtn').addEventListener('click', () => {
 function updateNoteSyncStatus() {
     const el = $('noteSyncStatus');
     if (!isLoggedIn) {
-        el.textContent = '⚠ 未登录';
-        el.className = 'note-sync-status';
+        el.textContent = authExpired ? '⚠ 登录已过期' : '⚠ 未登录';
+        el.className = 'note-sync-status' + (authExpired ? ' error' : '');
     } else if (lastSyncTime) {
         el.textContent = '✓ 已同步';
         el.className = 'note-sync-status synced';
