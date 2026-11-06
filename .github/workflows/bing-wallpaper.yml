@@ -37,7 +37,6 @@ jobs:
             -o /tmp/bing_raw.json
           python3 - <<'PY'
           import json, re, urllib.request
-          from datetime import datetime, timezone
 
           raw = json.load(open('/tmp/bing_raw.json', encoding='utf-8'))
           if not raw.get('images'):
@@ -60,13 +59,13 @@ jobs:
               print('UHD 不可用，退回原图:', base)
               uhd = base
 
+          # 刻意不放时间戳：只有壁纸真的换了，文件才会变，才不会天天产生无意义提交
           out = {
               'day': img.get('startdate', ''),
               'url': uhd,
               'url_sd': base,
               'copyright': img.get('copyright', ''),
               'copyrightlink': img.get('copyrightlink', ''),
-              'generated_at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
           }
           with open('data/bing.json', 'w', encoding='utf-8') as f:
               json.dump(out, f, ensure_ascii=False, indent=2)
