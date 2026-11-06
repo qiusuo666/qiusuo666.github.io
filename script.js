@@ -1015,43 +1015,57 @@ const bgPanelGrid = $('bgPanelGrid');
 const bgSettingsBtn = $('bgSettingsBtn');
 const bgPanelClose = $('bgPanelClose');
 const bgFileInput = $('bgFileInput');
+const wallpaperCredit = $('wallpaperCredit');
+
+// Bing 每日壁纸的元数据由 GitHub Actions 每天抓取、提交成同源静态文件。
+// 原因：Bing 官方 API 不返回 Access-Control-Allow-Origin，浏览器直连必被 CORS 拦，
+// 而 allorigins / corsproxy 这类公共代理已全部失效。放到构建端抓就彻底绕开了跨域。
+const BING_DATA_URL = 'data/bing.json';
+const BING_CACHE_VERSION = 3;
 
 async function fetchBingWallpaper() {
-    const BING_CACHE_VERSION = 2; // 缓存版本：v1=1080p, v2=UHD 4K
     const cached = JSON.parse(localStorage.getItem('cst_bing') || '{}');
     const today = new Date().toDateString();
+    // 当天已取过就复用，避免每开一个标签页都请求一次
     if (cached.date === today && cached._v === BING_CACHE_VERSION && cached.url) return cached;
 
-    const bingApiUrl = 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN';
-    const proxyUrls = [
-        bingApiUrl,
-        'https://api.allorigins.win/raw?url=' + encodeURIComponent(bingApiUrl),
-        'https://corsproxy.io/?' + encodeURIComponent(bingApiUrl)
-    ];
-
-    for (const proxyUrl of proxyUrls) {
-        try {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 8000);
-            const res = await fetch(proxyUrl, { signal: controller.signal });
-            clearTimeout(timer);
-            if (!res.ok) continue;
-            const data = await res.json();
-            // 替换为 UHD (3840×2160) 分辨率，解决 1080p 模糊问题
-            const url = 'https://www.bing.com' + data.images[0].url.replace(/_\d+x\d+/, '_UHD');
-            const copyright = data.images[0].copyright || '';
-            const result = { url, copyright, date: today, _v: BING_CACHE_VERSION };
-            localStorage.setItem('cst_bing', JSON.stringify(result));
-            console.log('☀️ Bing 壁纸已获取 (UHD 4K)');
-            return result;
-        } catch (e) {
-            console.warn('Bing fetch failed for', proxyUrl, e.message || e);
-            continue;
-        }
+    try {
+        const res = await fetch(`${BING_DATA_URL}?d=${new Date().toISOString().slice(0, 10)}`, { cache: 'no-cache' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (!data || !data.url) throw new Error('返回内容为空');
+        const result = {
+            url: data.url,
+            copyright: data.copyright || '',
+            copyrightlink: data.copyrightlink || '',
+            day: data.day || '',
+            date: today,
+            _v: BING_CACHE_VERSION
+        };
+        localStorage.setItem('cst_bing', JSON.stringify(result));
+        console.log('☀️ Bing 壁纸已更新', result.day);
+        return result;
+    } catch (e) {
+        console.warn('☀️ Bing 壁纸获取失败，沿用缓存：', e.message || e);
+        return cached.url ? cached : null;
     }
+}
 
-    console.warn('☀️ 所有 Bing 源均失败，使用缓存');
-    return cached.url ? cached : null;
+// 右下角的壁纸简介：只在「Bing·每日」壁纸下显示，切回预设/自定义壁纸就收起
+function updateWallpaperCredit(isBing) {
+    if (!wallpaperCredit) return;
+    let text = '';
+    if (isBing) {
+        try { text = (JSON.parse(localStorage.getItem('cst_bing') || '{}').copyright || '').trim(); } catch (e) {}
+    }
+    if (!text) {
+        wallpaperCredit.classList.remove('visible');
+        wallpaperCredit.textContent = '';
+        return;
+    }
+    wallpaperCredit.textContent = text;
+    wallpaperCredit.title = text;
+    wallpaperCredit.classList.add('visible');
 }
 
 function loadWallpaper() {
@@ -1062,12 +1076,17 @@ function loadWallpaper() {
         // 先显示缓存或默认壁纸
         const cached = JSON.parse(localStorage.getItem('cst_bing') || '{}');
         applyWallpaperSource(cached.url || `photos/${DEFAULT_BG}`);
+        updateWallpaperCredit(true);
         // 异步更新最新的 Bing 壁纸
         fetchBingWallpaper().then(result => {
-            if (result) applyWallpaperSource(result.url);
+            if (result) {
+                applyWallpaperSource(result.url);
+                updateWallpaperCredit(true);
+            }
         });
     } else {
         applyWallpaperSource(bg.startsWith('data:') ? bg : `photos/${bg}`);
+        updateWallpaperCredit(false);
     }
     setTimeout(() => wallpaperImg.classList.add('show'), 100);
 }

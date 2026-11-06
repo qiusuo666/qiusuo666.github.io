@@ -93,6 +93,45 @@ body {
     background: rgba(0, 0, 0, 0.45);
 }
 
+/* ===== Bing 每日壁纸简介（右下角，与便签手柄同一套薄玻璃材质） ===== */
+.wallpaper-credit {
+    position: fixed;
+    right: 20px;
+    bottom: 18px;
+    z-index: 6;
+    max-width: 340px;
+    padding: 7px 13px;
+    border-radius: 14px;
+    background: rgba(18, 20, 30, 0.24);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 0.5px solid rgba(255, 255, 255, 0.16);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 6px 20px rgba(0, 0, 0, 0.20);
+    color: rgba(255, 255, 255, 0.84);
+    font-size: 11.5px;
+    line-height: 1.45;
+    letter-spacing: 0.01em;
+    text-align: right;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.45s cubic-bezier(0.32, 0.72, 0, 1),
+                transform 0.45s cubic-bezier(0.32, 0.72, 0, 1);
+    /* 次级页（快捷网址）里壁纸被压暗压模糊，简介没有意义，一起淡出 */
+    visibility: hidden;
+}
+.wallpaper-credit.visible { opacity: 1; transform: translateY(0); visibility: visible; }
+body:has(.links-view.active) .wallpaper-credit { opacity: 0; visibility: hidden; }
+
+@media (max-width: 768px) {
+    .wallpaper-credit { max-width: 62vw; font-size: 10.5px; right: 12px; bottom: 12px; padding: 6px 11px; }
+}
+
 /* ===== 视图切换 ===== */
 .main-view, .links-view {
     position: fixed;
@@ -1396,6 +1435,7 @@ body.no-glass .search-box,
 body.no-glass .favorites-track,
 body.no-glass .bg-settings-btn,
 body.no-glass .auth-btn,
+body.no-glass .wallpaper-credit,
 body.no-glass .modal,
 body.no-glass .context-menu,
 body.no-glass .engine-dropdown,
