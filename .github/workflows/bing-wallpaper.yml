@@ -32,11 +32,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p data
-          curl -fsSL --max-time 20 --retry 3 --retry-delay 3 \
+          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          curl -fsSL --max-time 20 --retry 3 --retry-delay 3 -A "$UA" \
             'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN' \
             -o /tmp/bing_raw.json
+          # 首页 HTML 里内嵌了图片故事 JSON（标题 / 正文 / 速览），API 本身不返回这些
+          curl -fsSL --max-time 25 --retry 2 -A "$UA" -H 'Accept-Language: zh-CN,zh;q=0.9' \
+            'https://cn.bing.com/?mkt=zh-CN' -o /tmp/bing_home.html || echo "首页抓取失败，跳过富文本"
           python3 - <<'PY'
-          import json, re, urllib.request
+          import json, re, os, html as htmllib, urllib.request
 
           raw = json.load(open('/tmp/bing_raw.json', encoding='utf-8'))
           if not raw.get('images'):
@@ -59,19 +63,70 @@ jobs:
               print('UHD 不可用，退回原图:', base)
               uhd = base
 
+          # ---- 第 2 级：官方首页内嵌的图片故事（标题 / 地点 / 版权 / 第一段 / 速览）----
+          headline = title = credit = description = quickfact = ''
+          try:
+              page = open('/tmp/bing_home.html', encoding='utf-8', errors='ignore').read()
+              m = re.search(r'"MediaContents":\s*(\[.*?\])\s*,\s*"PreloadMediaContents"', page, re.S)
+              if m:
+                  ic = json.loads(m.group(1))[0]['ImageContent']
+                  headline = (ic.get('Headline') or '').strip()
+                  title = (ic.get('Title') or '').strip()
+                  credit = (ic.get('Copyright') or '').strip()
+                  description = (ic.get('Description') or '').strip()
+                  quickfact = ((ic.get('QuickFact') or {}).get('MainText') or '').strip()
+                  print('官方首页: 标题=%s 正文字数=%d' % (headline or '-', len(description)))
+              else:
+                  print('首页里没找到 MediaContents，降级到只剩 API 层')
+          except Exception as e:
+              print('官方首页解析失败（不影响壁纸本体）:', e)
+
+          # ---- 第 3 级：完整的三段图文说明 ----
+          # Bing 官方接口只给第一段，后两段只出现在壁纸站的详情页里。
+          # 这一级失败就退回第 2 级，前端会自动只显示第一段。
+          story, date_str = [], ''
+          try:
+              day_url = 'https://bing.ee123.net/detail/' + img.get('enddate', img.get('startdate', ''))
+              req = urllib.request.Request(day_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36'})
+              src = urllib.request.urlopen(req, timeout=15).read().decode('utf-8', 'ignore')
+              m = re.search(r'<p class="title">(.*?)</p>\s*<span class="sub">(.*?)</span>', src, re.S)
+              if m:
+                  line = htmllib.unescape(re.sub(r'<[^>]+>', '', m.group(1))).replace('\xa0', ' ').strip()
+                  dm = re.search(r'-\s*(\d{4}/\d{1,2}/\d{1,2})\s*$', line)
+                  if dm:
+                      date_str = dm.group(1)
+                  paras = re.findall(r'<p>(.*?)</p>', m.group(2), re.S)
+                  story = [htmllib.unescape(re.sub(r'<[^>]+>', '', p)).strip() for p in paras]
+                  story = [p for p in story if p]
+                  print('图文详情: %d 段 | 日期=%s' % (len(story), date_str or '-'))
+              else:
+                  print('详情页结构变化，只保留第一段')
+          except Exception as e:
+              print('完整文案获取失败（不影响壁纸本体）:', e)
+
+          # 官方首页没给标题时，用 API 的 title 字段兜底（同样是"归来的草原巨兽"这种）
+          if not headline:
+              headline = (img.get('title') or '').strip()
+
           # 刻意不放时间戳：只有壁纸真的换了，文件才会变，才不会天天产生无意义提交
           out = {
               'day': img.get('startdate', ''),
+              'date': date_str or (img.get('enddate') or ''),
               'url': uhd,
               'url_sd': base,
               'copyright': img.get('copyright', ''),
               'copyrightlink': img.get('copyrightlink', ''),
+              'headline': headline,
+              'title': title,
+              'credit': credit,
+              'description': description,
+              'quickfact': quickfact,
+              'story': story,
           }
           with open('data/bing.json', 'w', encoding='utf-8') as f:
               json.dump(out, f, ensure_ascii=False, indent=2)
           print('壁纸日期:', out['day'])
           print('图片地址:', out['url'])
-          print('版权文案:', out['copyright'][:60])
           PY
 
       - name: Commit if changed

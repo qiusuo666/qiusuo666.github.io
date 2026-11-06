@@ -1021,13 +1021,13 @@ const wallpaperCredit = $('wallpaperCredit');
 // 原因：Bing 官方 API 不返回 Access-Control-Allow-Origin，浏览器直连必被 CORS 拦，
 // 而 allorigins / corsproxy 这类公共代理已全部失效。放到构建端抓就彻底绕开了跨域。
 const BING_DATA_URL = 'data/bing.json';
-const BING_CACHE_VERSION = 3;
+const BING_CACHE_VERSION = 4;
 
 async function fetchBingWallpaper() {
     const cached = JSON.parse(localStorage.getItem('cst_bing') || '{}');
     const today = new Date().toDateString();
     // 当天已取过就复用，避免每开一个标签页都请求一次
-    if (cached.date === today && cached._v === BING_CACHE_VERSION && cached.url) return cached;
+    if (cached.cachedOn === today && cached._v === BING_CACHE_VERSION && cached.url) return cached;
 
     try {
         const res = await fetch(`${BING_DATA_URL}?d=${new Date().toISOString().slice(0, 10)}`, { cache: 'no-cache' });
@@ -1038,12 +1038,20 @@ async function fetchBingWallpaper() {
             url: data.url,
             copyright: data.copyright || '',
             copyrightlink: data.copyrightlink || '',
+            // 图文简介：缺哪层就用哪层兜底，页面会自动降级
+            headline: data.headline || '',
+            title: data.title || '',
+            credit: data.credit || '',
+            description: data.description || '',
+            quickfact: data.quickfact || '',
+            story: Array.isArray(data.story) ? data.story : [],
             day: data.day || '',
-            date: today,
+            bingDate: data.date || '',
+            cachedOn: today,
             _v: BING_CACHE_VERSION
         };
         localStorage.setItem('cst_bing', JSON.stringify(result));
-        console.log('☀️ Bing 壁纸已更新', result.day);
+        console.log('☀️ Bing 壁纸已更新', result.day, '简介', result.story.length, '段');
         return result;
     } catch (e) {
         console.warn('☀️ Bing 壁纸获取失败，沿用缓存：', e.message || e);
@@ -1051,20 +1059,38 @@ async function fetchBingWallpaper() {
     }
 }
 
-// 右下角的壁纸简介：只在「Bing·每日」壁纸下显示，切回预设/自定义壁纸就收起
+// 右下角的壁纸简介：只在「Bing·每日」壁纸下显示，切回预设/自定义壁纸就收起。
+// 收起态只露标题 + 地点两行，正文（三段图文）靠悬停展开才看得到。
 function updateWallpaperCredit(isBing) {
     if (!wallpaperCredit) return;
-    let text = '';
+    let d = {};
     if (isBing) {
-        try { text = (JSON.parse(localStorage.getItem('cst_bing') || '{}').copyright || '').trim(); } catch (e) {}
+        try { d = JSON.parse(localStorage.getItem('cst_bing') || '{}'); } catch (e) {}
     }
-    if (!text) {
+
+    const head = (d.headline || '').trim();
+    // 地点：优先用结构化字段，其次从版权句里剥掉末尾的 (© …)
+    let place = (d.title || '').trim();
+    if (!place && d.copyright) place = d.copyright.replace(/\s*[（(]©[^)）]*[)）]\s*$/, '').trim();
+    const source = [d.credit || '', d.bingDate || ''].filter(Boolean).join(' · ');
+    const paras = (Array.isArray(d.story) && d.story.length) ? d.story
+                : (d.description ? [d.description] : []);
+
+    if (!head && !place && !paras.length) {
         wallpaperCredit.classList.remove('visible');
-        wallpaperCredit.textContent = '';
+        wallpaperCredit.innerHTML = '';
         return;
     }
-    wallpaperCredit.textContent = text;
-    wallpaperCredit.title = text;
+
+    const extra = (source || paras.length)
+        ? `<div class="credit-extra">${source ? `<div class="credit-src">${htmlEscape(source)}</div>` : ''}${paras.map(p => `<p>${htmlEscape(p)}</p>`).join('')}</div>`
+        : '';
+
+    wallpaperCredit.innerHTML =
+        (head ? `<div class="credit-head">${htmlEscape(head)}</div>` : '') +
+        (place ? `<div class="credit-meta">${htmlEscape(place)}</div>` : '') +
+        extra;
+
     wallpaperCredit.classList.add('visible');
 }
 
@@ -1078,7 +1104,8 @@ if (wallpaperCredit && window.matchMedia('(hover: hover) and (pointer: fine)').m
         clearTimeout(creditCollapseTimer);
         wallpaperCredit.classList.add('expanded');
         // +4：max-height 是 border-box，要比内容高度多留出描边和取整误差，少 1~2px 最后一行会被裁
-        wallpaperCredit.style.maxHeight = (wallpaperCredit.scrollHeight + 4) + 'px';
+        // 70vh 上限：小屏上正文较长时别把整个页面盖住
+        wallpaperCredit.style.maxHeight = Math.min(wallpaperCredit.scrollHeight + 4, Math.round(window.innerHeight * 0.7)) + 'px';
     });
     wallpaperCredit.addEventListener('pointerleave', () => {
         const lh = parseFloat(getComputedStyle(wallpaperCredit).lineHeight) || 17;

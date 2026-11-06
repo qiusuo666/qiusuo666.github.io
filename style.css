@@ -132,6 +132,38 @@ body {
 .wallpaper-credit.visible { opacity: 1; transform: translateY(0); visibility: visible; }
 body:has(.links-view.active) .wallpaper-credit { opacity: 0; visibility: hidden; }
 
+/* 简介内部结构：标题 / 地点 / 正文 */
+.credit-head {
+    font-size: 1.06em;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.95);
+}
+.credit-meta {
+    margin-top: 2px;
+    color: rgba(255, 255, 255, 0.80);
+    /* 收起态只占一行，超出用省略号；展开后自动放开换行 */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.wallpaper-credit.expanded .credit-meta { white-space: normal; }
+.credit-extra {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 0.5px solid rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.76);
+    line-height: 1.55;
+    /* 标题/地点跟着现有风格右对齐，成段的正文左对齐才读得下来 */
+    text-align: left;
+}
+.credit-src {
+    font-size: 0.92em;
+    color: rgba(255, 255, 255, 0.52);
+    margin-bottom: 7px;
+}
+.credit-extra p { margin: 0 0 7px; }
+.credit-extra p:last-child { margin-bottom: 0; }
+
 /* 悬停展开：解除 2 行截断，把框向上撑开显示完整文案。
    max-height 的具体数值由 JS 量出真实高度后再设，否则过渡目标远大于内容高度会"瞬间到位"。
    只在真正有鼠标的设备上启用，触屏不会误触。 */
