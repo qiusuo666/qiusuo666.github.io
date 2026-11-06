@@ -120,16 +120,28 @@ body {
     pointer-events: none;
     opacity: 0;
     transform: translateY(6px);
+    /* 收起态高度 = 2 行文字 + 内边距 + 描边，留 1px 余量避免第二行被裁；em 随字号自适应 */
+    max-height: calc(1.45em * 2 + 16px);
     transition: opacity 0.45s cubic-bezier(0.32, 0.72, 0, 1),
-                transform 0.45s cubic-bezier(0.32, 0.72, 0, 1);
+                transform 0.45s cubic-bezier(0.32, 0.72, 0, 1),
+                max-width 0.42s cubic-bezier(0.32, 0.72, 0, 1),
+                max-height 0.42s cubic-bezier(0.32, 0.72, 0, 1);
     /* 次级页（快捷网址）里壁纸被压暗压模糊，简介没有意义，一起淡出 */
     visibility: hidden;
 }
 .wallpaper-credit.visible { opacity: 1; transform: translateY(0); visibility: visible; }
 body:has(.links-view.active) .wallpaper-credit { opacity: 0; visibility: hidden; }
 
+/* 悬停展开：解除 2 行截断，把框向上撑开显示完整文案。
+   max-height 的具体数值由 JS 量出真实高度后再设，否则过渡目标远大于内容高度会"瞬间到位"。
+   只在真正有鼠标的设备上启用，触屏不会误触。 */
+@media (hover: hover) and (pointer: fine) {
+    .wallpaper-credit { pointer-events: auto; }
+    .wallpaper-credit.expanded { -webkit-line-clamp: unset; }
+}
+
 @media (max-width: 768px) {
-    .wallpaper-credit { max-width: 62vw; font-size: 10.5px; right: 12px; bottom: 12px; padding: 6px 11px; }
+    .wallpaper-credit { max-width: 74vw; font-size: 10.5px; right: 12px; bottom: 12px; padding: 6px 11px; }
 }
 
 /* ===== 视图切换 ===== */

@@ -1068,6 +1068,30 @@ function updateWallpaperCredit(isBing) {
     wallpaperCredit.classList.add('visible');
 }
 
+// 悬停展开壁纸简介：先解除 2 行截断量出真实高度，再把 max-height 设成那个值，
+// 否则过渡目标（比如 240px）远大于内容高度，浏览器会一步到位，看起来是"瞬间弹出"。
+let creditCollapseTimer = null;
+// 只有真正带鼠标的设备才绑定：触屏上 pointer-events 虽然已经是 none，
+// 但多一道判断可以彻底避免任何浏览器差异导致的误展开
+if (wallpaperCredit && window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+    wallpaperCredit.addEventListener('pointerenter', () => {
+        clearTimeout(creditCollapseTimer);
+        wallpaperCredit.classList.add('expanded');
+        // +4：max-height 是 border-box，要比内容高度多留出描边和取整误差，少 1~2px 最后一行会被裁
+        wallpaperCredit.style.maxHeight = (wallpaperCredit.scrollHeight + 4) + 'px';
+    });
+    wallpaperCredit.addEventListener('pointerleave', () => {
+        const lh = parseFloat(getComputedStyle(wallpaperCredit).lineHeight) || 17;
+        wallpaperCredit.style.maxHeight = (lh * 2 + 16) + 'px';
+        clearTimeout(creditCollapseTimer);
+        // 等高度收回到 2 行再解除展开态：提前解除会让内容瞬间变短，高度直接跳回去
+        creditCollapseTimer = setTimeout(() => {
+            wallpaperCredit.classList.remove('expanded');
+            wallpaperCredit.style.maxHeight = '';
+        }, 440);
+    });
+}
+
 function loadWallpaper() {
     const bg = localStorage.getItem('cst_wallpaper') || DEFAULT_BG;
     const custom = localStorage.getItem('cst_custom_bg'); if (custom) { try { customBgFiles = JSON.parse(custom); } catch {} }
