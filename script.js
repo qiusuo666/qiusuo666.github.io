@@ -1025,10 +1025,9 @@ const BING_CACHE_VERSION = 4;
 
 async function fetchBingWallpaper() {
     const cached = JSON.parse(localStorage.getItem('cst_bing') || '{}');
-    const today = new Date().toDateString();
-    // 当天已取过就复用，避免每开一个标签页都请求一次
-    if (cached.cachedOn === today && cached._v === BING_CACHE_VERSION && cached.url) return cached;
 
+    // 每次都校验一次同源 JSON（1KB 都不到，且 URL 按天带参、浏览器当天只真正下载一次）。
+    // 之前是「当天已缓存就跳过请求」，结果线上换了图、甚至定时任务补跑了，页面仍然一直用旧图。
     try {
         const res = await fetch(`${BING_DATA_URL}?d=${new Date().toISOString().slice(0, 10)}`, { cache: 'no-cache' });
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1047,11 +1046,11 @@ async function fetchBingWallpaper() {
             story: Array.isArray(data.story) ? data.story : [],
             day: data.day || '',
             bingDate: data.date || '',
-            cachedOn: today,
+            cachedOn: new Date().toDateString(),
             _v: BING_CACHE_VERSION
         };
         localStorage.setItem('cst_bing', JSON.stringify(result));
-        console.log('☀️ Bing 壁纸已更新', result.day, '简介', result.story.length, '段');
+        console.log('☀️ Bing 壁纸已同步', result.day, '简介', result.story.length, '段');
         return result;
     } catch (e) {
         console.warn('☀️ Bing 壁纸获取失败，沿用缓存：', e.message || e);
