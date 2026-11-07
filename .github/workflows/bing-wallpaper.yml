@@ -7,8 +7,9 @@ name: Daily Bing Wallpaper
 
 on:
   schedule:
-    - cron: '10 16 * * *'   # UTC 16:10 = 北京时间 00:10（Bing 在北京时间 00:00 换图）
-    - cron: '10 4 * * *'    # UTC 04:10 = 北京时间 12:10（双保险：GitHub 定时可能延迟或丢队）
+    # GitHub 的定时任务在高峰期会被延迟甚至整次丢弃（实测 2026-11-08 00:10 那次就没跑）。
+    # 所以不指望单次命中，改成每 2 小时一次，一天 12 次，丢几次也能在 2 小时内补上。
+    - cron: '5 */2 * * *'
   workflow_dispatch:
 
 permissions:
@@ -64,12 +65,41 @@ jobs:
               uhd = base
 
           # ---- 第 2 级：官方首页内嵌的图片故事（标题 / 地点 / 版权 / 第一段 / 速览）----
+          # 用括号计数提取，不依赖固定前后文——cn.bing.com 在海外出口偶尔会返回结构不同的页面
+          def extract_array(text, key):
+              i = text.find('"' + key + '":')
+              if i < 0:
+                  return None
+              j = text.find('[', i)
+              if j < 0:
+                  return None
+              depth, in_str, esc = 0, False, False
+              for k in range(j, len(text)):
+                  c = text[k]
+                  if in_str:
+                      if esc:
+                          esc = False
+                      elif c == '\\':
+                          esc = True
+                      elif c == '"':
+                          in_str = False
+                      continue
+                  if c == '"':
+                      in_str = True
+                  elif c == '[':
+                      depth += 1
+                  elif c == ']':
+                      depth -= 1
+                      if depth == 0:
+                          return text[j:k + 1]
+              return None
+
           headline = title = credit = description = quickfact = ''
           try:
               page = open('/tmp/bing_home.html', encoding='utf-8', errors='ignore').read()
-              m = re.search(r'"MediaContents":\s*(\[.*?\])\s*,\s*"PreloadMediaContents"', page, re.S)
-              if m:
-                  ic = json.loads(m.group(1))[0]['ImageContent']
+              arr = extract_array(page, 'MediaContents')
+              if arr:
+                  ic = json.loads(arr)[0]['ImageContent']
                   headline = (ic.get('Headline') or '').strip()
                   title = (ic.get('Title') or '').strip()
                   credit = (ic.get('Copyright') or '').strip()
@@ -77,13 +107,13 @@ jobs:
                   quickfact = ((ic.get('QuickFact') or {}).get('MainText') or '').strip()
                   print('官方首页: 标题=%s 正文字数=%d' % (headline or '-', len(description)))
               else:
-                  print('首页里没找到 MediaContents，降级到只剩 API 层')
+                  print('官方首页里没有 MediaContents，改由图文详情提供标题/地点/版权')
           except Exception as e:
               print('官方首页解析失败（不影响壁纸本体）:', e)
 
           # ---- 第 3 级：完整的三段图文说明 ----
-          # Bing 官方接口只给第一段，后两段只出现在壁纸站的详情页里。
-          # 这一级失败就退回第 2 级，前端会自动只显示第一段。
+          # Bing 官方接口只给第一段，后两段只出现在壁纸站详情页里。
+          # 这个页面的 title 行同时含 标题|地点 (© 版权) - 日期，所以它也能兜住第 2 级。
           story, date_str = [], ''
           try:
               day_url = 'https://bing.ee123.net/detail/' + img.get('enddate', img.get('startdate', ''))
@@ -92,21 +122,57 @@ jobs:
               m = re.search(r'<p class="title">(.*?)</p>\s*<span class="sub">(.*?)</span>', src, re.S)
               if m:
                   line = htmllib.unescape(re.sub(r'<[^>]+>', '', m.group(1))).replace('\xa0', ' ').strip()
-                  dm = re.search(r'-\s*(\d{4}/\d{1,2}/\d{1,2})\s*$', line)
+                  # 归来的草原巨兽 | 草原上的一头野牛，… (© Tandem Stock/Adobe Stock) - 2026/11/07
+                  head_part, sep, rest = line.partition('|')
+                  if sep:
+                      headline = headline or head_part.strip()
+                  else:
+                      rest = line
+                  dm = re.search(r'-\s*(\d{4}/\d{1,2}/\d{1,2})\s*$', rest)
                   if dm:
                       date_str = dm.group(1)
+                      rest = rest[:dm.start()].strip()
+                  cm = re.search(r'[（(](©[^)）]*)[)）]', rest)
+                  if cm:
+                      credit = credit or cm.group(1).strip()
+                      rest = rest[:cm.start()].strip()
+                  title = title or rest.strip()
+
                   paras = re.findall(r'<p>(.*?)</p>', m.group(2), re.S)
                   story = [htmllib.unescape(re.sub(r'<[^>]+>', '', p)).strip() for p in paras]
                   story = [p for p in story if p]
-                  print('图文详情: %d 段 | 日期=%s' % (len(story), date_str or '-'))
+                  print('图文详情: %d 段 | 日期=%s | 标题=%s' % (len(story), date_str or '-', headline or '-'))
               else:
-                  print('详情页结构变化，只保留第一段')
+                  print('详情页结构变化，只保留 API 层数据')
           except Exception as e:
               print('完整文案获取失败（不影响壁纸本体）:', e)
 
           # 官方首页没给标题时，用 API 的 title 字段兜底（同样是"归来的草原巨兽"这种）
           if not headline:
               headline = (img.get('title') or '').strip()
+          # 正文：官方只给第一段，没有就用图文详情的第一段
+          if not description and story:
+              description = story[0]
+
+          # ---- 防退化：同一张图沿用上一轮抓到的富文本，别把已有信息写成空 ----
+          # 之前 2026-11-07 那次因为官方首页解析失败，把 title/credit/description 全清空了。
+          prev = {}
+          try:
+              prev = json.load(open('data/bing.json', encoding='utf-8'))
+          except Exception:
+              pass
+          same_day = prev.get('day') and prev.get('day') == img.get('startdate', '')
+          if same_day:
+              headline = headline or prev.get('headline', '')
+              title = title or prev.get('title', '')
+              credit = credit or prev.get('credit', '')
+              description = description or prev.get('description', '')
+              quickfact = quickfact or prev.get('quickfact', '')
+              if not story:
+                  story = prev.get('story') or []
+              if not date_str:
+                  date_str = prev.get('date', '')
+              print('同一天重跑：缺失字段已用上一轮的值补齐')
 
           # 刻意不放时间戳：只有壁纸真的换了，文件才会变，才不会天天产生无意义提交
           out = {
@@ -127,6 +193,7 @@ jobs:
               json.dump(out, f, ensure_ascii=False, indent=2)
           print('壁纸日期:', out['day'])
           print('图片地址:', out['url'])
+          print('简介: 标题=%s | 地点=%s | 正文 %d 段' % (out['headline'] or '-', (out['title'] or '-')[:20], len(out['story'])))
           PY
 
       - name: Commit if changed
