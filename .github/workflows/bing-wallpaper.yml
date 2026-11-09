@@ -64,8 +64,15 @@ jobs:
               print('UHD 不可用，退回原图:', base)
               uhd = base
 
-          # ---- 第 2 级：官方首页内嵌的图片故事（标题 / 地点 / 版权 / 第一段 / 速览）----
-          # 用括号计数提取，不依赖固定前后文——cn.bing.com 在海外出口偶尔会返回结构不同的页面
+          # ---- 三级数据源，注意顺序：壁纸站详情页优先 ----
+          # 踩过的坑：cn.bing.com 首页的文案会比图片 API 慢一拍（2026-11-10 那次首页还是
+          # 前一天塞维利亚的文案，而图片已经换成玫瑰岛），导致"新图配旧简介"。
+          # 所以详情页（按 enddate 精确取）作主来源，官方首页只用来补空缺，且要校验日期。
+
+          api_copyright = img.get('copyright', '') or ''
+          target_day = img.get('enddate', img.get('startdate', ''))
+
+          # 从页面里抽取 "Key":[...] 这段 JSON（括号计数，跳过字符串内的括号）
           def extract_array(text, key):
               i = text.find('"' + key + '":')
               if i < 0:
@@ -94,29 +101,11 @@ jobs:
                           return text[j:k + 1]
               return None
 
+          # ---- 第 2 级：壁纸站详情页（标题 / 地点 / 版权 / 日期 / 完整三段）----
           headline = title = credit = description = quickfact = ''
-          try:
-              page = open('/tmp/bing_home.html', encoding='utf-8', errors='ignore').read()
-              arr = extract_array(page, 'MediaContents')
-              if arr:
-                  ic = json.loads(arr)[0]['ImageContent']
-                  headline = (ic.get('Headline') or '').strip()
-                  title = (ic.get('Title') or '').strip()
-                  credit = (ic.get('Copyright') or '').strip()
-                  description = (ic.get('Description') or '').strip()
-                  quickfact = ((ic.get('QuickFact') or {}).get('MainText') or '').strip()
-                  print('官方首页: 标题=%s 正文字数=%d' % (headline or '-', len(description)))
-              else:
-                  print('官方首页里没有 MediaContents，改由图文详情提供标题/地点/版权')
-          except Exception as e:
-              print('官方首页解析失败（不影响壁纸本体）:', e)
-
-          # ---- 第 3 级：完整的三段图文说明 ----
-          # Bing 官方接口只给第一段，后两段只出现在壁纸站详情页里。
-          # 这个页面的 title 行同时含 标题|地点 (© 版权) - 日期，所以它也能兜住第 2 级。
           story, date_str = [], ''
           try:
-              day_url = 'https://bing.ee123.net/detail/' + img.get('enddate', img.get('startdate', ''))
+              day_url = 'https://bing.ee123.net/detail/' + target_day
               req = urllib.request.Request(day_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36'})
               src = urllib.request.urlopen(req, timeout=15).read().decode('utf-8', 'ignore')
               m = re.search(r'<p class="title">(.*?)</p>\s*<span class="sub">(.*?)</span>', src, re.S)
@@ -124,33 +113,63 @@ jobs:
                   line = htmllib.unescape(re.sub(r'<[^>]+>', '', m.group(1))).replace('\xa0', ' ').strip()
                   # 归来的草原巨兽 | 草原上的一头野牛，… (© Tandem Stock/Adobe Stock) - 2026/11/07
                   head_part, sep, rest = line.partition('|')
-                  if sep:
-                      headline = headline or head_part.strip()
-                  else:
+                  ee_head = head_part.strip() if sep else ''
+                  if not sep:
                       rest = line
                   dm = re.search(r'-\s*(\d{4}/\d{1,2}/\d{1,2})\s*$', rest)
                   if dm:
                       date_str = dm.group(1)
                       rest = rest[:dm.start()].strip()
                   cm = re.search(r'[（(](©[^)）]*)[)）]', rest)
+                  ee_credit = cm.group(1).strip() if cm else ''
                   if cm:
-                      credit = credit or cm.group(1).strip()
                       rest = rest[:cm.start()].strip()
-                  title = title or rest.strip()
+                  ee_title = rest.strip()
+
+                  # 交叉校验：用 Bing 官方版权里必然出现的地点关键词对一下，
+                  # 对不上说明这天详情页还没换成这张图，宁可不用也不要写错。
+                  core = re.split(r'[，,（(]', ee_title)[0][:6] if ee_title else ''
+                  mismatch = bool(core and api_copyright and core not in api_copyright)
+                  if mismatch:
+                      print('详情页文案与当前图不符（%s vs %s），丢弃' % (core, api_copyright[:20]))
+                      ee_head = ee_title = ee_credit = ''
+                  else:
+                      headline, title, credit = ee_head, ee_title, ee_credit
 
                   paras = re.findall(r'<p>(.*?)</p>', m.group(2), re.S)
                   story = [htmllib.unescape(re.sub(r'<[^>]+>', '', p)).strip() for p in paras]
-                  story = [p for p in story if p]
-                  print('图文详情: %d 段 | 日期=%s | 标题=%s' % (len(story), date_str or '-', headline or '-'))
+                  story = [p for p in story if p] if not mismatch else []
+                  print('详情页: %d 段 | 日期=%s | 标题=%s | 校验=%s' % (
+                      len(story), date_str or '-', headline or '-', '不符已丢弃' if mismatch else '通过'))
               else:
-                  print('详情页结构变化，只保留 API 层数据')
+                  print('详情页结构变化，改用官方首页')
           except Exception as e:
-              print('完整文案获取失败（不影响壁纸本体）:', e)
+              print('详情页获取失败（不影响壁纸本体）:', e)
 
-          # 官方首页没给标题时，用 API 的 title 字段兜底（同样是"归来的草原巨兽"这种）
+          # ---- 第 3 级：官方首页内嵌的图片故事，只补空缺，且必须日期匹配 ----
+          try:
+              page = open('/tmp/bing_home.html', encoding='utf-8', errors='ignore').read()
+              arr = extract_array(page, 'MediaContents')
+              if arr:
+                  item = json.loads(arr)[0]
+                  ssd = str(item.get('Ssd') or '')
+                  ic = item.get('ImageContent') or {}
+                  if ssd and target_day and ssd != target_day:
+                      print('官方首页还停在上一天（Ssd=%s，当前=%s），跳过它的文案' % (ssd, target_day))
+                  else:
+                      headline = headline or (ic.get('Headline') or '').strip()
+                      title = title or (ic.get('Title') or '').strip()
+                      credit = credit or (ic.get('Copyright') or '').strip()
+                      description = (ic.get('Description') or '').strip()
+                      quickfact = ((ic.get('QuickFact') or {}).get('MainText') or '').strip()
+                      print('官方首页补齐: 日期=%s 标题=%s' % (ssd or '-', headline or '-'))
+              else:
+                  print('官方首页里没有 MediaContents（海外出口常见），跳过')
+          except Exception as e:
+              print('官方首页解析失败（不影响壁纸本体）:', e)
+
           if not headline:
               headline = (img.get('title') or '').strip()
-          # 正文：官方只给第一段，没有就用图文详情的第一段
           if not description and story:
               description = story[0]
 
